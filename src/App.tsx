@@ -513,6 +513,14 @@ export const App: React.FC = () => {
         )}
       </main>
 
+      {/* Footer with Build Timestamp */}
+      <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-center text-xs font-mono text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
+        <span>SplatOlympics Arena v2.0 • Gaussian Splatting Platform</span>
+        <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-md text-slate-400">
+          Build: 202608030745
+        </span>
+      </footer>
+
       {/* Live WebRTC Camera Modal */}
       <CameraCaptureModal
         isOpen={isCameraOpen}
