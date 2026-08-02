@@ -25,6 +25,12 @@
 - **Pipeline Job Monitor**: Visual 5-stage stepper, progress bar (0–100%), 30,000 iteration counter, fidelity PSNR badge, and model download triggers.
 - **Terminal Log Viewer**: Real-time console log viewer with timestamp filtering and auto-scroll.
 
+### 🧊 Stage 3: Interactive 3D Viewport & WebGL Splat Inspector
+- **In-Browser 3D Viewport**: Three.js WebGL/WebGPU 3D Gaussian Splatting inspector with 360° `OrbitControls` mouse orbiting, panning, and zoom.
+- **Camera Frustum Overlays**: Pyramid wireframe overlays displaying exact camera positions and orientation vectors for each camera angle (North, East, South, West, Overhead).
+- **Interactive Controls HUD**: Density subsampling slider (10% to 100%), Gaussian particle size scaling (0.5x to 4.0x), render mode toggles (`Splats` / `Points` / `Hybrid`), and live FPS counter.
+- **Instant Model Load**: Parses binary PLY buffers in **~200 ms to 500 ms** for instant in-browser inspection without downloading files to external software.
+
 ### 💰 GCP Credit & Cost Monitor
 - **Real-Time Cost Tracking**: Automatically calculates resource usage costs for Cloud Run vCPU/RAM, Gemini AI API requests, and 3D GS GPU compute execution.
 - **Daily & Weekly Budget Deduction**: Deducts usage costs from configurable daily ($10.00/day default) and weekly ($50.00/week default) credit limits.
