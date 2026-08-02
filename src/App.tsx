@@ -44,6 +44,17 @@ export const App: React.FC = () => {
   });
   const [socketService] = useState(() => new PipelineSocketService());
 
+  // Auto-migrate & purge stale cache on schema version bump
+  useEffect(() => {
+    const SCHEMA_VERSION = 'v3.2_real_photo_schema';
+    const currentVer = localStorage.getItem('splat_schema_version');
+    if (currentVer !== SCHEMA_VERSION) {
+      console.log('[SplatOlympics] Purging stale localStorage preview URLs and cache for schema:', SCHEMA_VERSION);
+      localStorage.clear();
+      localStorage.setItem('splat_schema_version', SCHEMA_VERSION);
+    }
+  }, []);
+
   // Save state to localStorage whenever changed
   useEffect(() => {
     localStorage.setItem('splat_active_stage', activeStage);
