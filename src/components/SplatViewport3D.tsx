@@ -46,18 +46,18 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const pointsMeshRef = useRef<THREE.Points | null>(null);
   const frustumsGroupRef = useRef<THREE.Group | null>(null);
 
-  // Fetch and parse PLY binary model file with 2.5s timeout guarantee
+  // Fetch and parse real PLY binary model file
   useEffect(() => {
     setIsLoading(true);
     setErrorMessage(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for large real PLY models
 
     fetch(modelUrl, { signal: controller.signal })
       .then((res) => {
         clearTimeout(timeoutId);
-        if (!res.ok) throw new Error(`HTTP ${res.status} - Failed to load PLY model file`);
+        if (!res.ok) throw new Error(`HTTP ${res.status} - Could not fetch PLY file at ${modelUrl}`);
         return res.arrayBuffer();
       })
       .then((buffer) => {
@@ -65,9 +65,8 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         setParsedData(data);
       })
       .catch((err) => {
-        console.warn('[SplatViewport3D] Fetch/parse timeout or error, rendering instant 3D model fallback:', err);
-        const fallbackData = generateFallback3DModel();
-        setParsedData(fallbackData);
+        console.error('[SplatViewport3D] Error parsing real PLY model:', err);
+        setErrorMessage(`Could not load 3D model asset (${err.message}). Please verify the PLY file on server.`);
       })
       .finally(() => {
         setIsLoading(false);
@@ -75,107 +74,6 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
 
     return () => clearTimeout(timeoutId);
   }, [modelUrl]);
-
-  // Generate fallback 3D Cactus Plant model matching Steam Studio サボテンGS scan set
-  const generateFallback3DModel = (): ParsedPlyData => {
-    const count = 25000;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-
-    for (let i = 0; i < count; i++) {
-      let x = 0, y = 0, z = 0;
-      let r = 0.15, g = 0.65, b = 0.25;
-
-      const section = Math.random();
-
-      if (section < 0.25) {
-        // 1. Terracotta Pot Base (Y: -1.2 to -0.4)
-        const h = Math.random();
-        y = -1.2 + h * 0.8;
-        const radius = 0.45 + h * 0.2;
-        const theta = Math.random() * 2 * Math.PI;
-        x = radius * Math.cos(theta);
-        z = radius * Math.sin(theta);
-        
-        r = 0.75 + Math.random() * 0.15; // Terracotta Orange
-        g = 0.35 + Math.random() * 0.15;
-        b = 0.2 + Math.random() * 0.1;
-      } else if (section < 0.35) {
-        // 2. Soil Surface Disc (Y: -0.4)
-        y = -0.4 + (Math.random() - 0.5) * 0.05;
-        const radius = Math.random() * 0.62;
-        const theta = Math.random() * 2 * Math.PI;
-        x = radius * Math.cos(theta);
-        z = radius * Math.sin(theta);
-
-        r = 0.22 + Math.random() * 0.1; // Dark Soil
-        g = 0.16 + Math.random() * 0.08;
-        b = 0.1 + Math.random() * 0.05;
-      } else if (section < 0.70) {
-        // 3. Central Cactus Stem (Y: -0.4 to 0.7)
-        const h = Math.random();
-        y = -0.4 + h * 1.1;
-        const theta = Math.random() * 2 * Math.PI;
-        const ribOffset = 0.03 * Math.cos(8 * theta);
-        const radius = 0.28 + ribOffset;
-        x = radius * Math.cos(theta);
-        z = radius * Math.sin(theta);
-
-        r = 0.1 + Math.random() * 0.12; // Forest Green
-        g = 0.65 + Math.random() * 0.3;
-        b = 0.25 + Math.random() * 0.15;
-      } else if (section < 0.85) {
-        // 4. Left & Right Cactus Branch Arms
-        const isLeft = Math.random() > 0.5;
-        const t = Math.random();
-        y = (isLeft ? 0.0 : -0.1) + t * 0.55;
-        const sideFactor = isLeft ? -1 : 1;
-        const curveOut = Math.sin(t * Math.PI) * 0.35;
-        x = sideFactor * (0.28 + curveOut);
-        
-        const theta = Math.random() * 2 * Math.PI;
-        const rSub = 0.14;
-        z = rSub * Math.sin(theta);
-
-        r = 0.12 + Math.random() * 0.15; // Emerald Green
-        g = 0.75 + Math.random() * 0.25;
-        b = 0.28 + Math.random() * 0.18;
-      } else if (section < 0.93) {
-        // 5. Blooming Magenta Cactus Flower Top (Y: 0.7 to 0.9)
-        const t = Math.random();
-        y = 0.7 + t * 0.2;
-        const radius = (1 - t) * 0.22;
-        const theta = Math.random() * 2 * Math.PI;
-        x = radius * Math.cos(theta);
-        z = radius * Math.sin(theta);
-
-        r = 0.92 + Math.random() * 0.08; // Magenta Pink Bloom
-        g = 0.15 + Math.random() * 0.15;
-        b = 0.65 + Math.random() * 0.3;
-      } else {
-        // 6. White Cactus Spines & Needles
-        y = -0.3 + Math.random() * 1.0;
-        const theta = Math.random() * 2 * Math.PI;
-        const radius = 0.31;
-        x = radius * Math.cos(theta);
-        z = radius * Math.sin(theta);
-
-        r = 0.95 + Math.random() * 0.05; // Pale Cream Spines
-        g = 0.95 + Math.random() * 0.05;
-        b = 0.82 + Math.random() * 0.12;
-      }
-
-      positions[i * 3] = x;
-      positions[i * 3 + 1] = y;
-      positions[i * 3 + 2] = z;
-
-      colors[i * 3] = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = b;
-    }
-
-    return { vertexCount: count, positions, colors };
-  };
 
   // Initialize Three.js WebGL Scene
   useEffect(() => {
