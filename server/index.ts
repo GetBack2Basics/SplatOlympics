@@ -52,8 +52,13 @@ const upload = multer({
   },
 });
 
-// Serve uploaded image files statically
+// Serve uploaded image files and real sample photos statically
 app.use('/uploads', express.static(uploadDir));
+const publicDir = path.join(process.cwd(), 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  app.use('/sample_photos', express.static(path.join(publicDir, 'sample_photos')));
+}
 
 // In-Memory Dataset Store
 interface StoredPhoto {
