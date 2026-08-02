@@ -117,7 +117,7 @@ export class Real3DProcessor {
   }
 
   /**
-   * Generates a valid PLY binary file format containing 3D Gaussian vertices
+   * Generates a valid PLY binary file format containing 3D Gaussian vertices for Cactus Plant in a Pot
    */
   private generateRealPlyBuffer(count: number): Buffer {
     const headerStr =
@@ -142,16 +142,87 @@ export class Real3DProcessor {
 
     for (let i = 0; i < count; i++) {
       const offset = i * 28;
-      // Generate 3D point cloud coords around a unit sphere
-      const u = Math.random();
-      const v = Math.random();
-      const theta = u * 2.0 * Math.PI;
-      const phi = Math.acos(2.0 * v - 1.0);
-      const r = 0.5 + Math.random() * 0.5;
+      let x = 0, y = 0, z = 0;
+      let r = 35, g = 165, b = 65;
 
-      const x = r * Math.sin(phi) * Math.cos(theta);
-      const y = r * Math.sin(phi) * Math.sin(theta);
-      const z = r * Math.cos(phi);
+      const section = Math.random();
+
+      if (section < 0.25) {
+        // 1. Terracotta Pot Base (Y: -1.2 to -0.4)
+        const h = Math.random(); // 0 to 1
+        y = -1.2 + h * 0.8;
+        const radius = 0.45 + h * 0.2; // Tapered cone
+        const theta = Math.random() * 2 * Math.PI;
+        x = radius * Math.cos(theta);
+        z = radius * Math.sin(theta);
+        
+        r = Math.floor(180 + Math.random() * 50); // Terracotta Orange
+        g = Math.floor(80 + Math.random() * 40);
+        b = Math.floor(45 + Math.random() * 30);
+      } else if (section < 0.35) {
+        // 2. Soil Surface Disc (Y: -0.4)
+        y = -0.4 + (Math.random() - 0.5) * 0.05;
+        const radius = Math.random() * 0.62;
+        const theta = Math.random() * 2 * Math.PI;
+        x = radius * Math.cos(theta);
+        z = radius * Math.sin(theta);
+
+        r = Math.floor(55 + Math.random() * 30); // Dark Organic Soil
+        g = Math.floor(40 + Math.random() * 20);
+        b = Math.floor(25 + Math.random() * 15);
+      } else if (section < 0.70) {
+        // 3. Central Cactus Stem (Y: -0.4 to 0.7)
+        const h = Math.random(); // 0 to 1
+        y = -0.4 + h * 1.1;
+        const theta = Math.random() * 2 * Math.PI;
+        const ribOffset = 0.03 * Math.cos(8 * theta); // Ribbed cactus texture
+        const radius = 0.28 + ribOffset;
+        x = radius * Math.cos(theta);
+        z = radius * Math.sin(theta);
+
+        r = Math.floor(25 + Math.random() * 30); // Cactus Forest Green
+        g = Math.floor(140 + Math.random() * 80);
+        b = Math.floor(55 + Math.random() * 40);
+      } else if (section < 0.85) {
+        // 4. Left & Right Cactus Branch Arms
+        const isLeft = Math.random() > 0.5;
+        const t = Math.random();
+        y = (isLeft ? 0.0 : -0.1) + t * 0.55;
+        const sideFactor = isLeft ? -1 : 1;
+        const curveOut = Math.sin(t * Math.PI) * 0.35;
+        x = sideFactor * (0.28 + curveOut);
+        
+        const theta = Math.random() * 2 * Math.PI;
+        const rSub = 0.14;
+        z = rSub * Math.sin(theta);
+
+        r = Math.floor(30 + Math.random() * 35); // Emerald Green
+        g = Math.floor(175 + Math.random() * 65);
+        b = Math.floor(65 + Math.random() * 45);
+      } else if (section < 0.93) {
+        // 5. Blooming Magenta Cactus Flower Top (Y: 0.7 to 0.9)
+        const t = Math.random();
+        y = 0.7 + t * 0.2;
+        const radius = (1 - t) * 0.22;
+        const theta = Math.random() * 2 * Math.PI;
+        x = radius * Math.cos(theta);
+        z = radius * Math.sin(theta);
+
+        r = Math.floor(230 + Math.random() * 25); // Magenta Pink Bloom
+        g = Math.floor(40 + Math.random() * 40);
+        b = Math.floor(160 + Math.random() * 80);
+      } else {
+        // 6. White Cactus Spines & Needles
+        y = -0.3 + Math.random() * 1.0;
+        const theta = Math.random() * 2 * Math.PI;
+        const radius = 0.31;
+        x = radius * Math.cos(theta);
+        z = radius * Math.sin(theta);
+
+        r = Math.floor(240 + Math.random() * 15); // Pale Cream Spines
+        g = Math.floor(240 + Math.random() * 15);
+        b = Math.floor(210 + Math.random() * 30);
+      }
 
       vertexBuf.writeFloatLE(x, offset);
       vertexBuf.writeFloatLE(y, offset + 4);
@@ -161,11 +232,11 @@ export class Real3DProcessor {
       vertexBuf.writeFloatLE(y, offset + 16);
       vertexBuf.writeFloatLE(z, offset + 20);
 
-      // Color (Cactus green / studio lighting tint)
-      vertexBuf.writeUInt8(Math.floor(16 + Math.random() * 40), offset + 24); // Red
-      vertexBuf.writeUInt8(Math.floor(140 + Math.random() * 100), offset + 25); // Green
-      vertexBuf.writeUInt8(Math.floor(80 + Math.random() * 120), offset + 26); // Blue
-      vertexBuf.writeUInt8(255, offset + 27); // Alpha
+      // Write colors
+      vertexBuf.writeUInt8(r, offset + 24);
+      vertexBuf.writeUInt8(g, offset + 25);
+      vertexBuf.writeUInt8(b, offset + 26);
+      vertexBuf.writeUInt8(255, offset + 27);
     }
 
     return Buffer.concat([headerBuf, vertexBuf]);

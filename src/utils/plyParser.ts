@@ -5,8 +5,14 @@ export interface ParsedPlyData {
   normals?: Float32Array;
 }
 
+interface PropertyInfo {
+  name: string;
+  type: string;
+  size: number;
+}
+
 /**
- * Parses binary or ASCII PLY point cloud data into Float32 position and color arrays for Three.js
+ * High-performance PLY parser supporting both standard PLY and INRIA 3D Gaussian Splatting PLY files
  */
 export function parsePlyBuffer(buffer: ArrayBuffer): ParsedPlyData {
   const bytes = new Uint8Array(buffer);
@@ -15,7 +21,7 @@ export function parsePlyBuffer(buffer: ArrayBuffer): ParsedPlyData {
   // 1. Locate end_header\n
   let headerText = '';
   let headerLength = 0;
-  for (let i = 0; i < Math.min(bytes.length, 4096); i++) {
+  for (let i = 0; i < Math.min(bytes.length, 8192); i++) {
     headerText += String.fromCharCode(bytes[i]);
     if (headerText.includes('end_header\n') || headerText.includes('end_header\r\n')) {
       const match = headerText.match(/end_header(\r\n|\n)/);
@@ -34,54 +40,87 @@ export function parsePlyBuffer(buffer: ArrayBuffer): ParsedPlyData {
     throw new Error('Invalid PLY header: could not find element vertex count.');
   }
 
+  // 3. Parse property list to determine stride & attribute offsets
+  const propertyRegex = /property\s+(float|double|uchar|uint8|char|int|short)\s+([\w_]+)/gi;
+  const properties: PropertyInfo[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = propertyRegex.exec(headerText)) !== null) {
+    const type = match[1].toLowerCase();
+    const name = match[2].toLowerCase();
+    const size = (type === 'float' || type === 'int') ? 4 : (type === 'double') ? 8 : 1;
+    properties.push({ name, type, size });
+  }
+
+  // Calculate total vertex stride
+  const stride = properties.reduce((acc, p) => acc + p.size, 0) || 28;
+
+  // Find property offsets
+  const findOffset = (names: string[]): number => {
+    let offset = 0;
+    for (const p of properties) {
+      if (names.includes(p.name)) return offset;
+      offset += p.size;
+    }
+    return -1;
+  };
+
+  const xOffset = findOffset(['x']);
+  const yOffset = findOffset(['y']);
+  const zOffset = findOffset(['z']);
+
+  const rOffset = findOffset(['red', 'r']);
+  const gOffset = findOffset(['green', 'g']);
+  const bOffset = findOffset(['blue', 'b']);
+
+  // INRIA 3D Gaussian Spherical Harmonics direct color offsets (f_dc_0, f_dc_1, f_dc_2)
+  const fdc0Offset = findOffset(['f_dc_0']);
+  const fdc1Offset = findOffset(['f_dc_1']);
+  const fdc2Offset = findOffset(['f_dc_2']);
+
   const positions = new Float32Array(vertexCount * 3);
   const colors = new Float32Array(vertexCount * 3);
-  const normals = new Float32Array(vertexCount * 3);
 
   const isBinary = headerText.includes('format binary_little_endian');
   const dataView = new DataView(buffer, headerLength);
 
   if (isBinary) {
-    // Check property stride from header
-    const hasNormals = headerText.includes('property float nx');
-    const hasAlpha = headerText.includes('property uchar alpha');
-    
-    // Default stride: 6 floats (24B) + 4 uchars (4B) = 28 bytes per vertex
-    const stride = hasNormals ? 28 : 16;
+    const SH_C0 = 0.28209479177387814;
 
     for (let i = 0; i < vertexCount; i++) {
-      const offset = i * stride;
-      if (offset + 27 > dataView.byteLength) break;
+      const baseOffset = i * stride;
+      if (baseOffset + stride > dataView.byteLength) break;
 
-      const px = dataView.getFloat32(offset, true);
-      const py = dataView.getFloat32(offset + 4, true);
-      const pz = dataView.getFloat32(offset + 8, true);
+      // Extract Positions
+      const px = xOffset !== -1 ? dataView.getFloat32(baseOffset + xOffset, true) : 0;
+      const py = yOffset !== -1 ? dataView.getFloat32(baseOffset + yOffset, true) : 0;
+      const pz = zOffset !== -1 ? dataView.getFloat32(baseOffset + zOffset, true) : 0;
 
       positions[i * 3] = px;
       positions[i * 3 + 1] = py;
       positions[i * 3 + 2] = pz;
 
-      if (hasNormals) {
-        normals[i * 3] = dataView.getFloat32(offset + 12, true);
-        normals[i * 3 + 1] = dataView.getFloat32(offset + 16, true);
-        normals[i * 3 + 2] = dataView.getFloat32(offset + 20, true);
+      // Extract Colors
+      let r = 0.2, g = 0.7, b = 0.3;
 
-        const r = dataView.getUint8(offset + 24) / 255.0;
-        const g = dataView.getUint8(offset + 25) / 255.0;
-        const b = dataView.getUint8(offset + 26) / 255.0;
+      if (rOffset !== -1 && gOffset !== -1 && bOffset !== -1) {
+        r = dataView.getUint8(baseOffset + rOffset) / 255.0;
+        g = dataView.getUint8(baseOffset + gOffset) / 255.0;
+        b = dataView.getUint8(baseOffset + bOffset) / 255.0;
+      } else if (fdc0Offset !== -1 && fdc1Offset !== -1 && fdc2Offset !== -1) {
+        // INRIA Spherical Harmonics conversion to RGB: RGB = 0.5 + SH_C0 * f_dc
+        const fdc0 = dataView.getFloat32(baseOffset + fdc0Offset, true);
+        const fdc1 = dataView.getFloat32(baseOffset + fdc1Offset, true);
+        const fdc2 = dataView.getFloat32(baseOffset + fdc2Offset, true);
 
-        colors[i * 3] = r;
-        colors[i * 3 + 1] = g;
-        colors[i * 3 + 2] = b;
-      } else {
-        const r = dataView.getUint8(offset + 12) / 255.0;
-        const g = dataView.getUint8(offset + 13) / 255.0;
-        const b = dataView.getUint8(offset + 14) / 255.0;
-
-        colors[i * 3] = r;
-        colors[i * 3 + 1] = g;
-        colors[i * 3 + 2] = b;
+        r = Math.min(1.0, Math.max(0.0, 0.5 + SH_C0 * fdc0));
+        g = Math.min(1.0, Math.max(0.0, 0.5 + SH_C0 * fdc1));
+        b = Math.min(1.0, Math.max(0.0, 0.5 + SH_C0 * fdc2));
       }
+
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
     }
   } else {
     // ASCII parsing fallback
@@ -101,9 +140,9 @@ export function parsePlyBuffer(buffer: ArrayBuffer): ParsedPlyData {
           positions[validCount * 3 + 1] = py;
           positions[validCount * 3 + 2] = pz;
 
-          const r = parts.length > 6 ? parseFloat(parts[6]) / 255.0 : 0.2 + Math.random() * 0.6;
-          const g = parts.length > 7 ? parseFloat(parts[7]) / 255.0 : 0.8;
-          const b = parts.length > 8 ? parseFloat(parts[8]) / 255.0 : 0.4;
+          const r = parts.length > 6 ? parseFloat(parts[6]) / 255.0 : 0.15 + Math.random() * 0.4;
+          const g = parts.length > 7 ? parseFloat(parts[7]) / 255.0 : 0.75;
+          const b = parts.length > 8 ? parseFloat(parts[8]) / 255.0 : 0.35;
 
           colors[validCount * 3] = r;
           colors[validCount * 3 + 1] = g;
@@ -114,5 +153,5 @@ export function parsePlyBuffer(buffer: ArrayBuffer): ParsedPlyData {
     }
   }
 
-  return { vertexCount, positions, colors, normals };
+  return { vertexCount, positions, colors };
 }
