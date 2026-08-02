@@ -46,28 +46,34 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const pointsMeshRef = useRef<THREE.Points | null>(null);
   const frustumsGroupRef = useRef<THREE.Group | null>(null);
 
-  // Fetch and parse PLY binary model file
+  // Fetch and parse PLY binary model file with 2.5s timeout guarantee
   useEffect(() => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    fetch(modelUrl)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+    fetch(modelUrl, { signal: controller.signal })
       .then((res) => {
+        clearTimeout(timeoutId);
         if (!res.ok) throw new Error(`HTTP ${res.status} - Failed to load PLY model file`);
         return res.arrayBuffer();
       })
       .then((buffer) => {
         const data = parsePlyBuffer(buffer);
         setParsedData(data);
-        setIsLoading(false);
       })
       .catch((err) => {
-        console.warn('[SplatViewport3D] Direct fetch error, generating client fallback 3D model:', err);
-        // Generate realistic fallback 3D Gaussian point cloud for demonstration
+        console.warn('[SplatViewport3D] Fetch/parse timeout or error, rendering instant 3D model fallback:', err);
         const fallbackData = generateFallback3DModel();
         setParsedData(fallbackData);
+      })
+      .finally(() => {
         setIsLoading(false);
       });
+
+    return () => clearTimeout(timeoutId);
   }, [modelUrl]);
 
   // Generate fallback 3D model if model file not created yet

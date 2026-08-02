@@ -13,6 +13,22 @@ export class Real3DProcessor {
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
     }
+    this.ensureSampleModelExists();
+  }
+
+  public ensureSampleModelExists() {
+    const plyPath = path.join(this.storageDir, 'sample_cactus.ply');
+    const splatPath = path.join(this.storageDir, 'sample_cactus.splat');
+
+    if (!fs.existsSync(plyPath)) {
+      const plyBuffer = this.generateRealPlyBuffer(25000);
+      fs.writeFileSync(plyPath, plyBuffer);
+    }
+
+    if (!fs.existsSync(splatPath)) {
+      const splatBuffer = this.generateRealSplatBuffer(25000);
+      fs.writeFileSync(splatPath, splatBuffer);
+    }
   }
 
   /**
