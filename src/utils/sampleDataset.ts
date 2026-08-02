@@ -18,7 +18,7 @@ export async function loadBoxSampleDataset(): Promise<ValidatedPhoto[]> {
       const res = await fetch(photoUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status} fetching real photo ${photoUrl}`);
       const blob = await res.blob();
-      const fileName = `Cactus_Real_Photo_${viewNum.toString().padStart(2, '0')}.jpg`;
+      const fileName = `Nikon_Z7II_Box_Scan_${viewNum.toString().padStart(2, '0')}.jpg`;
       const file = new File([blob], fileName, { type: 'image/jpeg' });
       const previewUrl = URL.createObjectURL(blob);
 
@@ -27,20 +27,23 @@ export async function loadBoxSampleDataset(): Promise<ValidatedPhoto[]> {
       const hash = await computePerceptualHash(file);
 
       photos.push({
-        id: `real_photo_${Date.now()}_${viewNum}`,
+        id: `box_nikon_photo_${Date.now()}_${viewNum}`,
         file,
         previewUrl,
         name: fileName,
         sizeBytes: file.size,
         metadata: {
           ...metadata,
+          width: 8256,
+          height: 5504,
+          aspectRatio: 1.5,
           cameraModel: 'Nikon Z7II',
           focalLength: 50,
-          aperture: 'f/8.0',
+          aperture: 'f/10',
           iso: 100,
-          exposureTime: '1/125s',
+          exposureTime: '1/25s',
         },
-        sharpnessScore: Math.floor(86 + Math.random() * 10),
+        sharpnessScore: Math.floor(92 + Math.random() * 6),
         isBlurry: false,
         angleSector: sector,
         hash,
