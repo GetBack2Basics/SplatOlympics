@@ -1,13 +1,14 @@
 import React from 'react';
 import { PipelineJob, JobStage } from '../types';
-import { Cpu, Download, CheckCircle2, Play, Square, Layers, Flame, Gauge } from 'lucide-react';
+import { Cpu, Download, CheckCircle2, Play, Square, Layers, Flame, Gauge, Eye } from 'lucide-react';
 
 interface PipelineJobMonitorProps {
   job: PipelineJob | null;
   onCancelJob: (jobId: string) => void;
+  onInspectModel?: (job: PipelineJob) => void;
 }
 
-export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onCancelJob }) => {
+export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onCancelJob, onInspectModel }) => {
   if (!job) {
     return (
       <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center text-slate-500 min-h-[360px]">
@@ -179,9 +180,19 @@ export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onC
         </div>
       </div>
 
-      {/* Model Download Buttons Footer */}
+      {/* Model Download & 3D Inspection Buttons Footer */}
       {isCompleted && (
         <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center gap-3">
+          {onInspectModel && (
+            <button
+              onClick={() => onInspectModel(job)}
+              className="flex-1 w-full py-2.5 px-4 bg-gradient-to-r from-splat-neonGreen via-emerald-500 to-splat-neonCyan hover:brightness-110 text-black font-extrabold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-lg shadow-splat-neonGreen/20 animate-pulse"
+            >
+              <Eye className="w-4 h-4 text-black" />
+              <span>Inspect 3D Model in Viewport</span>
+            </button>
+          )}
+
           {job.plyFileUrl && (
             <a
               href={job.plyFileUrl}
@@ -189,7 +200,7 @@ export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onC
               className="flex-1 w-full py-2.5 px-4 bg-splat-neonCyan hover:bg-cyan-400 text-black font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-lg shadow-splat-neonCyan/20"
             >
               <Download className="w-4 h-4" />
-              <span>Download 3D Gaussian (.PLY)</span>
+              <span>Download (.PLY)</span>
             </a>
           )}
 
@@ -200,7 +211,7 @@ export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onC
               className="flex-1 w-full py-2.5 px-4 bg-splat-neonPurple hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-lg shadow-splat-neonPurple/20"
             >
               <Download className="w-4 h-4" />
-              <span>Download Compressed (.SPLAT)</span>
+              <span>Download (.SPLAT)</span>
             </a>
           )}
         </div>
