@@ -23,8 +23,12 @@ import { loadBoxSampleDataset } from './utils/sampleDataset';
 import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>('stage1');
-  const [selectedModelUrl, setSelectedModelUrl] = useState<string>('/uploads/models/sample_cactus.ply');
+  const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
+    return (localStorage.getItem('splat_active_stage') as any) || 'stage1';
+  });
+  const [selectedModelUrl, setSelectedModelUrl] = useState<string>(() => {
+    return localStorage.getItem('splat_selected_model_url') || '/uploads/models/sample_cactus.ply';
+  });
   const [photos, setPhotos] = useState<ValidatedPhoto[]>([]);
   const [datasetId] = useState(`ds_${Math.random().toString(36).substr(2, 6)}`);
   const [datasetName] = useState(`3D Target Session ${new Date().toLocaleDateString()}`);
@@ -35,8 +39,27 @@ export const App: React.FC = () => {
 
   // Stage 2 Pipeline State
   const [jobs, setJobs] = useState<PipelineJob[]>([]);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(() => {
+    return localStorage.getItem('splat_active_job_id') || null;
+  });
   const [socketService] = useState(() => new PipelineSocketService());
+
+  // Save state to localStorage whenever changed
+  useEffect(() => {
+    localStorage.setItem('splat_active_stage', activeStage);
+  }, [activeStage]);
+
+  useEffect(() => {
+    if (selectedModelUrl) {
+      localStorage.setItem('splat_selected_model_url', selectedModelUrl);
+    }
+  }, [selectedModelUrl]);
+
+  useEffect(() => {
+    if (activeJobId) {
+      localStorage.setItem('splat_active_job_id', activeJobId);
+    }
+  }, [activeJobId]);
 
   // Active Job selector
   const activeJob = useMemo(() => {

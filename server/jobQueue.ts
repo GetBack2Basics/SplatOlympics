@@ -48,12 +48,70 @@ export class SplatJobQueueManager {
   private wsClients: Set<WebSocket> = new Set();
   private costMonitor: GcpCostMonitorManager;
   private storageDir: string;
+  private dbFilePath: string;
 
   constructor() {
     this.costMonitor = new GcpCostMonitorManager();
     this.storageDir = path.join(process.cwd(), 'uploads', 'models');
+    this.dbFilePath = path.join(process.cwd(), 'uploads', 'jobs_db.json');
+    
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
+    }
+
+    this.loadJobsFromDisk();
+  }
+
+  private loadJobsFromDisk() {
+    try {
+      if (fs.existsSync(this.dbFilePath)) {
+        const raw = fs.readFileSync(this.dbFilePath, 'utf-8');
+        const list: PipelineJob[] = JSON.parse(raw);
+        list.forEach((j) => this.jobs.set(j.id, j));
+      }
+    } catch (err) {
+      console.warn('[SplatJobQueueManager] Could not read jobs_db.json, starting fresh:', err);
+    }
+
+    // Seed default public project if no jobs exist
+    if (this.jobs.size === 0) {
+      const defaultJob: PipelineJob = {
+        id: 'job_box_sample_001',
+        datasetId: 'ds_box_cactus_001',
+        datasetName: 'Box 3DGS PLY Dataset (サボテンGS)',
+        photoCount: 12,
+        status: 'completed',
+        currentStage: 'COMPLETE',
+        progressPercent: 100,
+        telemetry: {
+          iteration: 30000,
+          totalIterations: 30000,
+          psnr: 34.12,
+          loss: 0.0051,
+          activeGaussians: 30000,
+          learningRate: 0.0001,
+          timeRemainingSeconds: 0,
+        },
+        logs: [
+          { id: 'log_01', timestamp: '12:00:00 AM', level: 'info', stage: 'COLMAP_MATCHING', message: 'COLMAP SIFT feature matching completed on Box サボテンGS dataset.' },
+          { id: 'log_02', timestamp: '12:00:05 AM', level: 'success', stage: 'COMPLETE', message: '3D Gaussian Splatting optimization completed! Final PSNR: 34.12 dB.' }
+        ],
+        plyFileUrl: '/uploads/models/sample_cactus.ply',
+        splatFileUrl: '/uploads/models/sample_cactus.splat',
+        createdAt: Date.now() - 86400000,
+        completedAt: Date.now() - 86350000,
+      };
+      this.jobs.set(defaultJob.id, defaultJob);
+      this.saveJobsToDisk();
+    }
+  }
+
+  private saveJobsToDisk() {
+    try {
+      const list = Array.from(this.jobs.values());
+      fs.writeFileSync(this.dbFilePath, JSON.stringify(list, null, 2));
+    } catch (err) {
+      console.error('[SplatJobQueueManager] Failed to save jobs_db.json:', err);
     }
   }
 
@@ -98,6 +156,7 @@ export class SplatJobQueueManager {
 
     this.addLog(job, 'info', 'QUEUED', `Job queued for dataset "${datasetName}" (${photoCount} photos).`);
     this.jobs.set(jobId, job);
+    this.saveJobsToDisk();
     this.broadcast({ type: 'JOB_CREATED', job });
 
     this.processNextInQueue();
@@ -126,6 +185,7 @@ export class SplatJobQueueManager {
     this.currentProcessingJobId = nextJob.id;
     nextJob.status = 'processing';
     nextJob.startedAt = Date.now();
+    this.saveJobsToDisk();
     this.broadcast({ type: 'JOB_STATUS_CHANGE', job: nextJob });
 
     this.executeRealProcessing(nextJob);
@@ -164,6 +224,7 @@ export class SplatJobQueueManager {
       this.addLog(job, 'info', 'COMPLETE', `Recorded GCP credit usage & deducted compute costs for job ${job.id}.`);
 
       this.currentProcessingJobId = null;
+      this.saveJobsToDisk();
       this.broadcast({ type: 'JOB_COMPLETED', job });
       this.processNextInQueue();
     } catch (err: any) {
@@ -171,6 +232,7 @@ export class SplatJobQueueManager {
       job.currentStage = 'FAILED';
       this.addLog(job, 'error', 'FAILED', `Processing error: ${err.message}`);
       this.currentProcessingJobId = null;
+      this.saveJobsToDisk();
       this.broadcast({ type: 'JOB_STATUS_CHANGE', job });
       this.processNextInQueue();
     }
