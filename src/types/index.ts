@@ -9,6 +9,7 @@ export interface PhotoMetadata {
   cameraModel?: string;
   iso?: number;
   aperture?: string;
+  exposureTime?: string;
   width: number;
   height: number;
   aspectRatio: number;

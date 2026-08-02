@@ -20,7 +20,7 @@ import {
   calculateDatasetHealth,
 } from './utils/qualityAnalyzer';
 import { loadBoxSampleDataset } from './utils/sampleDataset';
-import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
@@ -316,14 +316,17 @@ export const App: React.FC = () => {
             </button>
           </div>
 
-          {/* Sample Data Loader */}
+          {/* Google Account Sign-In / Settings Modal Placeholder */}
           <button
-            onClick={handleLoadSteamStudioSample}
-            className="hidden lg:flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all"
-            title="Import Box shared PLY sample dataset (Steam Studio サボテンGS)"
+            className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md"
+            title="Google Account Authentication & System Settings (Coming Soon)"
           >
-            <Box className="w-4 h-4 text-amber-400" />
-            <span>Load Box 3DGS PLY Dataset</span>
+            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-rose-500 to-amber-500 p-0.5 flex items-center justify-center">
+              <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
+                <User className="w-3 h-3 text-slate-200" />
+              </div>
+            </div>
+            <span>Sign In / Settings</span>
           </button>
         </div>
       </header>

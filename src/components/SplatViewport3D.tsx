@@ -84,12 +84,8 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     setIsLoading(true);
     setErrorMessage(null);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for large models
-
-    fetch(modelUrl, { signal: controller.signal })
+    fetch(modelUrl)
       .then((res) => {
-        clearTimeout(timeoutId);
         if (!res.ok) throw new Error(`HTTP ${res.status} - Could not fetch PLY file at ${modelUrl}`);
         return res.arrayBuffer();
       })
@@ -104,8 +100,6 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       .finally(() => {
         setIsLoading(false);
       });
-
-    return () => clearTimeout(timeoutId);
   }, [modelUrl]);
 
   // Initialize Three.js WebGL Scene with cakewalk/splat Depth Sorting & Radial Shaders

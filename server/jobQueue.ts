@@ -72,38 +72,6 @@ export class SplatJobQueueManager {
     } catch (err) {
       console.warn('[SplatJobQueueManager] Could not read jobs_db.json, starting fresh:', err);
     }
-
-    // Seed default public project if no jobs exist
-    if (this.jobs.size === 0) {
-      const defaultJob: PipelineJob = {
-        id: 'job_box_sample_001',
-        datasetId: 'ds_box_cactus_001',
-        datasetName: 'Box 3DGS PLY Dataset (サボテンGS)',
-        photoCount: 12,
-        status: 'completed',
-        currentStage: 'COMPLETE',
-        progressPercent: 100,
-        telemetry: {
-          iteration: 30000,
-          totalIterations: 30000,
-          psnr: 34.12,
-          loss: 0.0051,
-          activeGaussians: 30000,
-          learningRate: 0.0001,
-          timeRemainingSeconds: 0,
-        },
-        logs: [
-          { id: 'log_01', timestamp: '12:00:00 AM', level: 'info', stage: 'COLMAP_MATCHING', message: 'COLMAP SIFT feature matching completed on Box サボテンGS dataset.' },
-          { id: 'log_02', timestamp: '12:00:05 AM', level: 'success', stage: 'COMPLETE', message: '3D Gaussian Splatting optimization completed! Final PSNR: 34.12 dB.' }
-        ],
-        plyFileUrl: '/uploads/models/sample_cactus.ply',
-        splatFileUrl: '/uploads/models/sample_cactus.splat',
-        createdAt: Date.now() - 86400000,
-        completedAt: Date.now() - 86350000,
-      };
-      this.jobs.set(defaultJob.id, defaultJob);
-      this.saveJobsToDisk();
-    }
   }
 
   private saveJobsToDisk() {
