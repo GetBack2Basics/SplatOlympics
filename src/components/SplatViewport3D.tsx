@@ -22,6 +22,39 @@ interface SplatViewport3DProps {
   datasetName?: string;
 }
 
+/**
+ * Creates a soft radial Gaussian 2D alpha texture (cakewalk/splat technique)
+ */
+function createGaussianTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+
+  if (ctx) {
+    const imgData = ctx.createImageData(64, 64);
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const nx = (x - 31.5) / 31.5;
+        const ny = (y - 31.5) / 31.5;
+        const distSq = nx * nx + ny * ny;
+        const alpha = distSq > 1.0 ? 0 : Math.exp(-3.5 * distSq);
+        const idx = (y * 64 + x) * 4;
+
+        imgData.data[idx] = 255;     // R
+        imgData.data[idx + 1] = 255; // G
+        imgData.data[idx + 2] = 255; // B
+        imgData.data[idx + 3] = Math.floor(alpha * 255); // Alpha
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   modelUrl = '/uploads/models/sample_cactus.ply',
   datasetName = '3D Reconstruction Model',
@@ -35,7 +68,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const [renderMode, setRenderMode] = useState<'SPLATS' | 'POINT_CLOUD' | 'HYBRID'>('SPLATS');
   const [showFrustums, setShowFrustums] = useState(true);
   const [densityPercent, setDensityPercent] = useState(100);
-  const [particleScale, setParticleScale] = useState(1.5);
+  const [particleScale, setParticleScale] = useState(1.8);
   const [fps, setFps] = useState(60);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -52,7 +85,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     setErrorMessage(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for large real PLY models
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for large models
 
     fetch(modelUrl, { signal: controller.signal })
       .then((res) => {
@@ -66,7 +99,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       })
       .catch((err) => {
         console.error('[SplatViewport3D] Error parsing real PLY model:', err);
-        setErrorMessage(`Could not load 3D model asset (${err.message}). Please verify the PLY file on server.`);
+        setErrorMessage(`Could not load 3D model asset (${err.message}). Please verify job model in Stage 2.`);
       })
       .finally(() => {
         setIsLoading(false);
@@ -75,24 +108,58 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     return () => clearTimeout(timeoutId);
   }, [modelUrl]);
 
-  // Initialize Three.js WebGL Scene
+  // Initialize Three.js WebGL Scene with cakewalk/splat Depth Sorting & Radial Shaders
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current || !parsedData) return;
 
     const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight || 500;
+    const height = containerRef.current.clientHeight || 520;
 
-    // 1. Scene
+    // 1. Calculate Bounding Sphere & Center Model at Origin
+    const vertexCount = parsedData.vertexCount;
+    const rawPos = parsedData.positions;
+    const rawCol = parsedData.colors;
+
+    let sumX = 0, sumY = 0, sumZ = 0;
+    for (let i = 0; i < vertexCount; i++) {
+      sumX += rawPos[i * 3];
+      sumY += rawPos[i * 3 + 1];
+      sumZ += rawPos[i * 3 + 2];
+    }
+
+    const centerX = sumX / vertexCount;
+    const centerY = sumY / vertexCount;
+    const centerZ = sumZ / vertexCount;
+
+    const centeredPositions = new Float32Array(vertexCount * 3);
+    let maxDistSq = 0;
+
+    for (let i = 0; i < vertexCount; i++) {
+      const cx = rawPos[i * 3] - centerX;
+      const cy = rawPos[i * 3 + 1] - centerY;
+      const cz = rawPos[i * 3 + 2] - centerZ;
+
+      centeredPositions[i * 3] = cx;
+      centeredPositions[i * 3 + 1] = cy;
+      centeredPositions[i * 3 + 2] = cz;
+
+      const distSq = cx * cx + cy * cy + cz * cz;
+      if (distSq > maxDistSq) maxDistSq = distSq;
+    }
+
+    const modelRadius = Math.sqrt(maxDistSq) || 1.5;
+
+    // 2. Scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#020617'); // Dark studio canvas background
+    scene.background = new THREE.Color('#020617'); // Dark slate canvas
     sceneRef.current = scene;
 
-    // 2. Camera
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-    camera.position.set(0, 1.2, 3.5);
+    // 3. Camera
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.05, 100);
+    camera.position.set(0, modelRadius * 0.6, modelRadius * 2.2);
     cameraRef.current = camera;
 
-    // 3. WebGL Renderer
+    // 4. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       antialias: true,
@@ -102,66 +169,111 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     rendererRef.current = renderer;
 
-    // 4. Orbit Controls
+    // 5. Orbit Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxDistance = 15;
-    controls.minDistance = 0.5;
+    controls.target.set(0, 0, 0);
+    controls.maxDistance = modelRadius * 10;
+    controls.minDistance = modelRadius * 0.2;
     controlsRef.current = controls;
 
-    // 5. Lights & Grid Floor
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // 6. Lights & Grid Floor
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0x06b6d4, 1.5);
+    const dirLight = new THREE.DirectionalLight(0x06b6d4, 1.8);
     dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
 
-    const gridHelper = new THREE.GridHelper(10, 20, 0x1e293b, 0x0f172a);
-    gridHelper.position.y = -1.2;
+    const gridHelper = new THREE.GridHelper(modelRadius * 4, 20, 0x1e293b, 0x0f172a);
+    gridHelper.position.y = -modelRadius * 0.8;
     scene.add(gridHelper);
 
-    // 6. Build 3D Gaussian Splat Point Cloud Geometry
+    // 7. Build 3D Gaussian Splat Buffer Geometry with Radial Gaussian Texture
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(parsedData.positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(parsedData.colors, 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(centeredPositions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(rawCol, 3));
 
-    // Custom Gaussian Shader Material
+    // Create Initial Index Array for Depth Sorting
+    const indexArray = new Uint32Array(vertexCount);
+    for (let i = 0; i < vertexCount; i++) indexArray[i] = i;
+    const indexAttribute = new THREE.BufferAttribute(indexArray, 1);
+    geometry.setIndex(indexAttribute);
+
+    const gaussianTexture = createGaussianTexture();
+
     const pointsMaterial = new THREE.PointsMaterial({
-      size: particleScale * 0.04,
+      size: particleScale * (modelRadius * 0.025),
       vertexColors: true,
       transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.9,
+      map: gaussianTexture,
+      alphaTest: 0.01,
       depthWrite: false,
+      blending: THREE.NormalBlending,
     });
 
     const points = new THREE.Points(geometry, pointsMaterial);
     pointsMeshRef.current = points;
     scene.add(points);
 
-    // 7. Add Camera Frustum Overlays
-    const frustumsGroup = createCameraFrustumsGroup();
+    // 8. Add Camera Frustum Overlays
+    const frustumsGroup = createCameraFrustumsGroup(modelRadius);
     frustumsGroupRef.current = frustumsGroup;
     scene.add(frustumsGroup);
 
-    // 8. Animation & Render Loop
+    // 9. Back-to-Front Depth Sorting Engine (cakewalk/splat Technique)
+    const viewVector = new THREE.Vector3();
+    const distances = new Float32Array(vertexCount);
+    let lastSortTime = 0;
+
+    const sortGaussiansBackToFront = () => {
+      camera.getWorldDirection(viewVector);
+
+      for (let i = 0; i < vertexCount; i++) {
+        const x = centeredPositions[i * 3];
+        const y = centeredPositions[i * 3 + 1];
+        const z = centeredPositions[i * 3 + 2];
+        distances[i] = x * viewVector.x + y * viewVector.y + z * viewVector.z;
+      }
+
+      // Sort indices in back-to-front order (farthest first)
+      const sortedIndices = Array.from(indexArray);
+      sortedIndices.sort((a, b) => distances[b] - distances[a]);
+
+      for (let i = 0; i < vertexCount; i++) {
+        indexArray[i] = sortedIndices[i];
+      }
+
+      geometry.index!.needsUpdate = true;
+    };
+
+    // Run initial depth sort
+    sortGaussiansBackToFront();
+
+    // 10. Animation & Render Loop
     let frameCount = 0;
-    let lastTime = performance.now();
+    let lastFpsTime = performance.now();
     let animationFrameId: number;
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       controls.update();
 
-      // FPS Counter calculation
-      frameCount++;
+      // Periodically trigger depth sorting on camera movement (every 100ms)
       const now = performance.now();
-      if (now - lastTime >= 1000) {
-        setFps(Math.round((frameCount * 1000) / (now - lastTime)));
+      if (now - lastSortTime > 120) {
+        sortGaussiansBackToFront();
+        lastSortTime = now;
+      }
+
+      // FPS Counter
+      frameCount++;
+      if (now - lastFpsTime >= 1000) {
+        setFps(Math.round((frameCount * 1000) / (now - lastFpsTime)));
         frameCount = 0;
-        lastTime = now;
+        lastFpsTime = now;
       }
 
       renderer.render(scene, camera);
@@ -173,7 +285,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight || 500;
+      const h = containerRef.current.clientHeight || 520;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
@@ -188,12 +300,11 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     };
   }, [parsedData]);
 
-  // Handle particle scale and density updates dynamically
+  // Dynamic sliders update
   useEffect(() => {
     if (pointsMeshRef.current) {
       const mat = pointsMeshRef.current.material as THREE.PointsMaterial;
-      mat.size = renderMode === 'POINT_CLOUD' ? particleScale * 0.015 : particleScale * 0.04;
-      mat.opacity = renderMode === 'POINT_CLOUD' ? 0.95 : 0.85;
+      mat.size = particleScale * 0.035;
       mat.needsUpdate = true;
     }
 
@@ -203,18 +314,20 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   }, [particleScale, densityPercent, renderMode, showFrustums]);
 
   // Creates 3D Camera Frustum Wireframes around the scene
-  const createCameraFrustumsGroup = (): THREE.Group => {
+  const createCameraFrustumsGroup = (radius: number): THREE.Group => {
     const group = new THREE.Group();
+    const dist = radius * 1.8;
+
     const cameraAngles = [
-      { pos: [0, 0.5, 3], rot: [0, 0, 0], color: 0x06b6d4, label: 'North' },
-      { pos: [3, 0.5, 0], rot: [0, Math.PI / 2, 0], color: 0xa855f7, label: 'East' },
-      { pos: [0, 0.5, -3], rot: [0, Math.PI, 0], color: 0x10b981, label: 'South' },
-      { pos: [-3, 0.5, 0], rot: [0, -Math.PI / 2, 0], color: 0xf59e0b, label: 'West' },
-      { pos: [0, 3, 0], rot: [-Math.PI / 2, 0, 0], color: 0x3b82f6, label: 'Overhead' },
+      { pos: [0, 0.3 * radius, dist], rot: [0, 0, 0], color: 0x06b6d4, label: 'North' },
+      { pos: [dist, 0.3 * radius, 0], rot: [0, Math.PI / 2, 0], color: 0xa855f7, label: 'East' },
+      { pos: [0, 0.3 * radius, -dist], rot: [0, Math.PI, 0], color: 0x10b981, label: 'South' },
+      { pos: [-dist, 0.3 * radius, 0], rot: [0, -Math.PI / 2, 0], color: 0xf59e0b, label: 'West' },
+      { pos: [0, dist, 0], rot: [-Math.PI / 2, 0, 0], color: 0x3b82f6, label: 'Overhead' },
     ];
 
     cameraAngles.forEach((cam) => {
-      const frustumHelper = createSingleFrustumWireframe(cam.color);
+      const frustumHelper = createSingleFrustumWireframe(cam.color, radius * 0.25);
       frustumHelper.position.set(cam.pos[0], cam.pos[1], cam.pos[2]);
       frustumHelper.rotation.set(cam.rot[0], cam.rot[1], cam.rot[2]);
       group.add(frustumHelper);
@@ -223,13 +336,12 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     return group;
   };
 
-  const createSingleFrustumWireframe = (colorHex: number): THREE.LineSegments => {
+  const createSingleFrustumWireframe = (colorHex: number, scale: number): THREE.LineSegments => {
     const geometry = new THREE.BufferGeometry();
-    const w = 0.4;
-    const h = 0.3;
-    const d = 0.6;
+    const w = scale;
+    const h = scale * 0.75;
+    const d = scale * 1.5;
 
-    // Pyramid frustum vertices
     const vertices = new Float32Array([
       0, 0, 0,  -w,  h, -d,
       0, 0, 0,   w,  h, -d,
@@ -268,8 +380,17 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       {isLoading && (
         <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
           <RefreshCw className="w-10 h-10 text-splat-neonCyan animate-spin mb-3" />
-          <h3 className="text-sm font-bold text-slate-200">Parsing 3D Gaussian PLY Buffer...</h3>
-          <p className="text-xs text-slate-400 mt-1">Loading binary point cloud vertices & color channels into WebGL</p>
+          <h3 className="text-sm font-bold text-slate-200">Parsing Real 3D Gaussian PLY Buffer...</h3>
+          <p className="text-xs text-slate-400 mt-1">Applying cakewalk/splat Depth Sorting & Radial Gaussian Shaders</p>
+        </div>
+      )}
+
+      {/* Error Alert Overlay */}
+      {errorMessage && (
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
+          <AlertCircle className="w-10 h-10 text-rose-400 mb-3" />
+          <h3 className="text-sm font-bold text-slate-200">{errorMessage}</h3>
+          <p className="text-xs text-slate-400 mt-1">Submit a dataset in Stage 1 to generate a new 3D model asset.</p>
         </div>
       )}
 
@@ -390,12 +511,12 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         {/* Info Legend */}
         <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400 shrink-0">
           <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-splat-neonCyan" />
-            <span>WebGL Shaders</span>
+            <span className="w-2 h-2 rounded-full bg-splat-neonCyan animate-pulse" />
+            <span>cakewalk/splat Shader</span>
           </span>
           <span className="flex items-center space-x-1">
             <span className="w-2 h-2 rounded-full bg-splat-neonPurple" />
-            <span>Orbit Controls Active</span>
+            <span>Depth Sorted (Back-to-Front)</span>
           </span>
         </div>
       </div>
