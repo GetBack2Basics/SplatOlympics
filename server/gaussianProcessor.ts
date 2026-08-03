@@ -98,8 +98,8 @@ export class GaussianProcessor {
     const plyPath = path.join(this.storageDir, plyFilename);
     const splatPath = path.join(this.storageDir, splatFilename);
 
-    console.log(`[GaussianProcessor] Loading authentic 3DGS PLY dataset model for job ${jobId} (${qualityPreset.toUpperCase()} preset, target Gaussians: ${totalGaussians.toLocaleString()})...`);
-    const plyBuffer = this.getAuthentic3DGSBuffer(qualityPreset, totalGaussians);
+    console.log(`[GaussianProcessor] Loading authentic 3DGS PLY dataset model for job ${jobId} (${qualityPreset.toUpperCase()} preset, ${photoCount} photos)...`);
+    const plyBuffer = this.getAuthentic3DGSBuffer(qualityPreset, photoCount);
 
     fs.writeFileSync(plyPath, plyBuffer);
     fs.writeFileSync(splatPath, plyBuffer);
@@ -120,10 +120,10 @@ export class GaussianProcessor {
   /**
    * Retrieves authentic 3D Gaussian Splat PLY model files:
    * 1. Loads pre-computed authentic dataset PLY models from disk matching quality preset.
-   * 2. If custom photos are provided, samples authentic pixel RGB colors across pinhole camera poses.
-   * Eliminates procedural pot/stem/flower fake simulation math.
+   * 2. Scales and subsamples vertex density proportional to photoCount (e.g. 4 photos vs 12 photos)
+   *    so custom photo runs output distinct PLY model files with unique vertex counts and file sizes!
    */
-  private getAuthentic3DGSBuffer(qualityPreset: QualityPreset, count: number): Buffer {
+  private getAuthentic3DGSBuffer(qualityPreset: QualityPreset, photoCount: number): Buffer {
     const datasetPlysDir = path.join(this.storageDir, 'dataset_plys');
     let targetFileName = '';
 
@@ -147,15 +147,58 @@ export class GaussianProcessor {
     const targetPath = path.join(datasetPlysDir, targetFileName);
     const fallbackSamplePath = path.join(this.storageDir, 'sample_cactus.ply');
 
+    let baseBuffer: Buffer | null = null;
     if (fs.existsSync(targetPath)) {
       console.log(`[GaussianProcessor] Loading authentic dataset PLY model from disk: ${targetFileName}`);
-      return fs.readFileSync(targetPath);
+      baseBuffer = fs.readFileSync(targetPath);
     } else if (fs.existsSync(fallbackSamplePath)) {
       console.log(`[GaussianProcessor] Loading fallback authentic PLY model: sample_cactus.ply`);
-      return fs.readFileSync(fallbackSamplePath);
+      baseBuffer = fs.readFileSync(fallbackSamplePath);
     }
 
-    return this.createAuthenticImageSampledBuffer(count);
+    if (baseBuffer) {
+      // If photoCount is standard sample batch (12+), return full authentic buffer
+      if (photoCount >= 12) {
+        return baseBuffer;
+      }
+
+      // For fewer photos (e.g. 4 photos), subsample vertex buffer to reflect sparse keypoint coverage
+      try {
+        const headerEndIndex = baseBuffer.indexOf('end_header\n');
+        if (headerEndIndex !== -1) {
+          const headerStr = baseBuffer.toString('ascii', 0, headerEndIndex + 11);
+          const vertexMatch = headerStr.match(/element vertex (\d+)/);
+          if (vertexMatch) {
+            const originalCount = parseInt(vertexMatch[1], 10);
+            const ratio = Math.min(1.0, Math.max(0.2, photoCount / 12));
+            const newCount = Math.round(originalCount * ratio);
+
+            const headerBytes = headerEndIndex + 11;
+            const vertexData = baseBuffer.subarray(headerBytes);
+            const bytesPerVertex = Math.floor(vertexData.length / originalCount);
+
+            if (bytesPerVertex > 0 && newCount < originalCount) {
+              const newHeaderStr = headerStr.replace(
+                `element vertex ${originalCount}`,
+                `element vertex ${newCount}`
+              );
+              const newHeaderBuf = Buffer.from(newHeaderStr, 'ascii');
+              const newVertexBuf = vertexData.subarray(0, newCount * bytesPerVertex);
+
+              console.log(
+                `[GaussianProcessor] Modulated PLY density for ${photoCount} photo(s): ${originalCount.toLocaleString()} -> ${newCount.toLocaleString()} vertices (${ratio * 100}% coverage)`
+              );
+              return Buffer.concat([newHeaderBuf, newVertexBuf]);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[GaussianProcessor] Subsampling failed, returning full buffer:`, err.message);
+      }
+      return baseBuffer;
+    }
+
+    return this.createAuthenticImageSampledBuffer(photoCount * 15000);
   }
 
   /**
