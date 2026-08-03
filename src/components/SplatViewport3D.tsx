@@ -325,16 +325,47 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     };
   }, [parsedData]);
 
-  // Dynamic sliders update
+  // Store radial texture reference
+  const gaussianTextureRef = useRef<THREE.CanvasTexture | null>(null);
+
+  // Dynamic sliders & view mode update
   useEffect(() => {
+    if (!gaussianTextureRef.current) {
+      gaussianTextureRef.current = createGaussianTexture();
+    }
+
     if (pointsMeshRef.current) {
       const mat = pointsMeshRef.current.material as THREE.PointsMaterial;
-      mat.size = particleScale * 0.035;
+
+      if (renderMode === 'POINT_CLOUD') {
+        // Mode 1: POINTS (Crisp 3D SfM Point Cloud Dots)
+        mat.map = null;
+        mat.size = Math.max(0.015, particleScale * 0.018);
+        mat.transparent = false;
+        mat.opacity = 1.0;
+        mat.blending = THREE.NormalBlending;
+      } else if (renderMode === 'SPLATS') {
+        // Mode 2: SPLATS (Soft 3D Gaussian Radial Falloff Splats)
+        mat.map = gaussianTextureRef.current;
+        mat.size = Math.max(0.06, particleScale * 0.045);
+        mat.transparent = true;
+        mat.opacity = 0.95;
+        mat.blending = THREE.AdditiveBlending;
+      } else {
+        // Mode 3: HYBRID (3D Gaussian Splats + SfM Camera Position Frustums)
+        mat.map = gaussianTextureRef.current;
+        mat.size = Math.max(0.04, particleScale * 0.035);
+        mat.transparent = true;
+        mat.opacity = 0.95;
+        mat.blending = THREE.AdditiveBlending;
+      }
+
       mat.needsUpdate = true;
     }
 
     if (frustumsGroupRef.current) {
-      frustumsGroupRef.current.visible = showFrustums || renderMode === 'HYBRID';
+      // Camera frustums visible in HYBRID mode or when showFrustums is explicitly toggled
+      frustumsGroupRef.current.visible = renderMode === 'HYBRID' || showFrustums;
     }
   }, [particleScale, densityPercent, renderMode, showFrustums]);
 
@@ -425,9 +456,14 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         <div className="flex items-center space-x-2.5 bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-3.5 py-2 rounded-xl pointer-events-auto shadow-lg">
           <div className="w-2.5 h-2.5 rounded-full bg-splat-neonGreen animate-pulse" />
           <div>
-            <h3 className="text-xs font-bold text-slate-200 truncate max-w-[200px] sm:max-w-[280px]">
-              {datasetName}
-            </h3>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-xs font-bold text-slate-200 truncate max-w-[180px] sm:max-w-[240px]">
+                {datasetName}
+              </h3>
+              <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold">
+                {modelUrl.split('/').pop() || 'model.ply'}
+              </span>
+            </div>
             <span className="text-[10px] font-mono text-slate-400">
               {parsedData ? `${parsedData.vertexCount.toLocaleString()} Gaussians` : '0 Gaussians'} • {fps} FPS
             </span>
