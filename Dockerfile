@@ -20,12 +20,11 @@ RUN npm ci --only=production
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/uploads ./uploads
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/node_modules ./node_modules
 
-# Ensure uploads directory exists
-RUN mkdir -p /app/uploads
+# Ensure uploads and models directory exist
+RUN mkdir -p /app/uploads/models
 
 EXPOSE 3000
 
