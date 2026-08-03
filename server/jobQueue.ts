@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { WebSocket } from 'ws';
 import { GcpCostMonitorManager } from './costMonitor.js';
-import { Real3DProcessor } from './real3DProcessor.js';
+import { GaussianProcessor, QualityPreset } from './gaussianProcessor.js';
 
 export type JobStage = 'QUEUED' | 'COLMAP_MATCHING' | 'POINT_CLOUD_INIT' | 'SPLAT_TRAINING' | 'COMPLETE' | 'FAILED';
 
@@ -29,6 +29,7 @@ export interface PipelineJob {
   datasetId: string;
   datasetName: string;
   photoCount: number;
+  qualityPreset?: QualityPreset;
   status: 'queued' | 'processing' | 'paused' | 'completed' | 'failed';
   currentStage: JobStage;
   progressPercent: number;
@@ -99,13 +100,14 @@ export class SplatJobQueueManager {
     });
   }
 
-  public createJob(datasetId: string, datasetName: string, photoCount: number): PipelineJob {
+  public createJob(datasetId: string, datasetName: string, photoCount: number, qualityPreset: QualityPreset = 'standard'): PipelineJob {
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const job: PipelineJob = {
       id: jobId,
       datasetId,
       datasetName: datasetName || '3D Reconstruction Target',
       photoCount: photoCount || 15,
+      qualityPreset,
       status: 'queued',
       currentStage: 'QUEUED',
       progressPercent: 0,
@@ -122,7 +124,7 @@ export class SplatJobQueueManager {
       createdAt: Date.now(),
     };
 
-    this.addLog(job, 'info', 'QUEUED', `Job queued for dataset "${datasetName}" (${photoCount} photos).`);
+    this.addLog(job, 'info', 'QUEUED', `Job queued for dataset "${datasetName}" (${photoCount} photos, ${qualityPreset.toUpperCase()} Preset).`);
     this.jobs.set(jobId, job);
     this.saveJobsToDisk();
     this.broadcast({ type: 'JOB_CREATED', job });
@@ -156,18 +158,19 @@ export class SplatJobQueueManager {
     this.saveJobsToDisk();
     this.broadcast({ type: 'JOB_STATUS_CHANGE', job: nextJob });
 
-    this.executeRealProcessing(nextJob);
+    this.executeProcessing(nextJob);
   }
 
-  private async executeRealProcessing(job: PipelineJob) {
-    const processor = new Real3DProcessor();
-    this.addLog(job, 'info', 'COLMAP_MATCHING', `Starting real 3D Gaussian Splatting processing for "${job.datasetName}" (${job.photoCount} views)...`);
+  private async executeProcessing(job: PipelineJob) {
+    const processor = new GaussianProcessor();
+    this.addLog(job, 'info', 'COLMAP_MATCHING', `Starting 3D Gaussian Splatting processing for "${job.datasetName}" (${job.photoCount} views, preset: ${job.qualityPreset || 'standard'})...`);
 
     try {
       const result = await processor.processDataset(
         job.id,
         job.photoCount,
         job.datasetName,
+        job.qualityPreset || 'standard',
         (stage, progressPercent, message, telemetry) => {
           job.currentStage = stage;
           job.progressPercent = progressPercent;

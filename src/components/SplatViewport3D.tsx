@@ -14,7 +14,8 @@ import {
   Box,
   Flame,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from 'lucide-react';
 
 interface SplatViewport3DProps {
@@ -32,22 +33,14 @@ function createGaussianTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d');
 
   if (ctx) {
-    const imgData = ctx.createImageData(64, 64);
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const nx = (x - 31.5) / 31.5;
-        const ny = (y - 31.5) / 31.5;
-        const distSq = nx * nx + ny * ny;
-        const alpha = distSq > 1.0 ? 0 : Math.exp(-3.5 * distSq);
-        const idx = (y * 64 + x) * 4;
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.85)');
+    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
 
-        imgData.data[idx] = 255;     // R
-        imgData.data[idx + 1] = 255; // G
-        imgData.data[idx + 2] = 255; // B
-        imgData.data[idx + 3] = Math.floor(alpha * 255); // Alpha
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -56,15 +49,17 @@ function createGaussianTexture(): THREE.CanvasTexture {
 }
 
 export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
-  modelUrl = '/uploads/models/sample_cactus.ply',
+  modelUrl = '/models/sample_cactus.ply',
   datasetName = '3D Reconstruction Model',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ParsedPlyData | null>(null);
+  const [customFilename, setCustomFilename] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<'SPLATS' | 'POINT_CLOUD' | 'HYBRID'>('SPLATS');
   const [showFrustums, setShowFrustums] = useState(true);
   const [densityPercent, setDensityPercent] = useState(100);
@@ -78,6 +73,36 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const controlsRef = useRef<OrbitControls | null>(null);
   const pointsMeshRef = useRef<THREE.Points | null>(null);
   const frustumsGroupRef = useRef<THREE.Group | null>(null);
+
+  // Handle direct local .PLY file selection from user disk
+  const handleLocalFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+    setCustomFilename(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const buffer = event.target?.result as ArrayBuffer;
+        if (!buffer) throw new Error('Could not read PLY file buffer.');
+        const data = parsePlyBuffer(buffer);
+        setParsedData(data);
+      } catch (err: any) {
+        console.error('[SplatViewport3D] Error parsing local PLY file:', err);
+        setErrorMessage(`Could not parse local PLY file: ${err.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      setErrorMessage('Failed to read local PLY file from disk.');
+      setIsLoading(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   // Fetch and parse real PLY binary model file
   useEffect(() => {
@@ -436,7 +461,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       {isLoading && (
         <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
           <RefreshCw className="w-10 h-10 text-splat-neonCyan animate-spin mb-3" />
-          <h3 className="text-sm font-bold text-slate-200">Parsing Real 3D Gaussian PLY Buffer...</h3>
+          <h3 className="text-sm font-bold text-slate-200">Parsing 3D Gaussian PLY Buffer...</h3>
           <p className="text-xs text-slate-400 mt-1">Applying cakewalk/splat Depth Sorting & Radial Gaussian Shaders</p>
         </div>
       )}
@@ -461,7 +486,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
                 {datasetName}
               </h3>
               <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold">
-                {modelUrl.split('/').pop() || 'model.ply'}
+                {customFilename || modelUrl.split('/').pop() || 'model.ply'}
               </span>
             </div>
             <span className="text-[10px] font-mono text-slate-400">
@@ -472,6 +497,25 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
 
         {/* Right Action Buttons */}
         <div className="flex items-center space-x-2 pointer-events-auto">
+          {/* Hidden File Input for Custom Local PLY Files */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleLocalFileSelected}
+            accept=".ply"
+            className="hidden"
+          />
+
+          {/* Load Local PLY Button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-1.5 bg-splat-neonCyan/10 hover:bg-splat-neonCyan/20 border border-splat-neonCyan/40 text-splat-neonCyan rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 shadow-lg"
+            title="Load custom .PLY model file directly from disk (e.g. 2M Splat PLY)"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Load .PLY File</span>
+          </button>
+
           {/* Render Mode Switcher */}
           <div className="flex items-center space-x-1 bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-1 rounded-xl shadow-lg">
             <button

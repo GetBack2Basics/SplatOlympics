@@ -1,20 +1,31 @@
 import React from 'react';
-import { DatasetHealthSummary as HealthSummaryType } from '../types';
-import { Activity, ShieldCheck, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { DatasetHealthSummary as HealthSummaryType, QualityPreset } from '../types';
+import { Activity, ShieldCheck, AlertCircle, ArrowRight, CheckCircle2, Sparkles, Sliders } from 'lucide-react';
 
 interface DatasetHealthSummaryProps {
   summary: HealthSummaryType;
+  selectedQuality: QualityPreset;
+  onSelectQuality: (quality: QualityPreset) => void;
   onSubmitPipeline: () => void;
   isSubmitting?: boolean;
 }
 
 export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
   summary,
+  selectedQuality,
+  onSelectQuality,
   onSubmitPipeline,
   isSubmitting,
 }) => {
   const isReady = summary.isReadyForSplatting;
   const healthScore = summary.healthScore;
+
+  const QUALITY_OPTIONS: { id: QualityPreset; label: string; splats: string; desc: string }[] = [
+    { id: 'draft', label: 'Draft', splats: '142K Splats', desc: '10k steps (Fast test)' },
+    { id: 'standard', label: 'Standard', splats: '464K Splats', desc: '30k steps (Balanced)' },
+    { id: 'high', label: 'High', splats: '719K Splats', desc: '30k steps (Sharp details)' },
+    { id: 'ultra', label: 'Ultra 8K', splats: '2.0M Splats', desc: 'Maximum photorealistic density' },
+  ];
 
   return (
     <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between h-full">
@@ -86,6 +97,40 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
           </div>
         </div>
 
+        {/* Quality Preset Selector Widget */}
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
+              <Sliders className="w-3.5 h-3.5 text-splat-neonCyan" />
+              <span>3D Reconstruction Quality</span>
+            </span>
+            <span className="text-[10px] font-mono text-splat-neonGreen font-bold bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
+              {QUALITY_OPTIONS.find((q) => q.id === selectedQuality)?.splats}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {QUALITY_OPTIONS.map((q) => (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => onSelectQuality(q.id)}
+                className={`p-2.5 rounded-xl border text-left transition-all ${
+                  selectedQuality === q.id
+                    ? 'bg-slate-900 border-splat-neonCyan text-white shadow-lg ring-1 ring-splat-neonCyan/40'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs font-bold font-mono">{q.label}</span>
+                  <span className="text-[9px] font-mono font-extrabold text-splat-neonGreen">{q.splats}</span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate">{q.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Actionable Recommendations List */}
         <div className="space-y-2 mb-4">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
@@ -118,11 +163,11 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
         className={`w-full py-4 px-6 rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center space-x-2 shadow-2xl ${
           summary.totalPhotos > 0
             ? 'bg-gradient-to-r from-splat-neonCyan via-splat-neonPurple to-splat-neonGreen text-black shadow-splat-neonCyan/30 hover:brightness-110 ring-2 ring-splat-neonCyan/50 animate-pulse'
-            : 'bg-slate-800 text-slate-500 border border-slate-700'
-        } disabled:opacity-40 disabled:cursor-not-allowed`}
+            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+        }`}
       >
-        <span>{isSubmitting ? 'Starting 3D Processing Engine...' : '🚀 Submit Dataset for Real 3D Gaussian Processing'}</span>
-        <ArrowRight className="w-5 h-5 text-black" />
+        <span>{isSubmitting ? 'Ingesting Dataset into Pipeline...' : `Submit Dataset for 3D Splatting (${selectedQuality.toUpperCase()})`}</span>
+        <ArrowRight className="w-4 h-4" />
       </button>
     </div>
   );

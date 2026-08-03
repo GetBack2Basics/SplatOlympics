@@ -70,11 +70,23 @@ export interface LogMessage {
   message: string;
 }
 
+export type QualityPreset = 'draft' | 'standard' | 'high' | 'ultra';
+
+export interface QualityPresetOption {
+  id: QualityPreset;
+  label: string;
+  splatCountText: string;
+  iterations: number;
+  description: string;
+  estimatedTimeSec: number;
+}
+
 export interface PipelineJob {
   id: string;
   datasetId: string;
   datasetName: string;
   photoCount: number;
+  qualityPreset?: QualityPreset;
   status: 'queued' | 'processing' | 'paused' | 'completed' | 'failed';
   currentStage: JobStage;
   progressPercent: number;

@@ -11,7 +11,7 @@ import { JobHistoryList } from './components/JobHistoryList';
 import { GcpCostMonitor } from './components/GcpCostMonitor';
 import { SplatViewport3D } from './components/SplatViewport3D';
 import { PipelineSocketService } from './services/pipelineSocket';
-import { ValidatedPhoto, AngleSector, PipelineJob } from './types';
+import { ValidatedPhoto, AngleSector, PipelineJob, QualityPreset } from './types';
 import { extractPhotoMetadata } from './utils/exifParser';
 import {
   computeImageSharpness,
@@ -44,13 +44,14 @@ export const App: React.FC = () => {
   });
   const [socketService] = useState(() => new PipelineSocketService());
 
-  // Auto-migrate & purge stale cache on schema version bump
+  const [selectedQuality, setSelectedQuality] = useState<QualityPreset>('standard');
+
+  // Safe schema version check without wiping user jobs or localStorage
   useEffect(() => {
-    const SCHEMA_VERSION = 'v4.0_auto_build_date_real_ply_path';
+    const SCHEMA_VERSION = 'v5.0_persistent_jobs_quality_presets';
     const currentVer = localStorage.getItem('splat_schema_version');
     if (currentVer !== SCHEMA_VERSION) {
-      console.log('[SplatOlympics] Purging stale localStorage preview URLs and cache for schema:', SCHEMA_VERSION);
-      localStorage.clear();
+      console.log('[SplatOlympics] Updating schema version to:', SCHEMA_VERSION);
       localStorage.setItem('splat_schema_version', SCHEMA_VERSION);
     }
   }, []);
@@ -207,6 +208,7 @@ export const App: React.FC = () => {
           datasetId,
           datasetName,
           photoCount: photos.length,
+          qualityPreset: selectedQuality,
         }),
       });
 
@@ -387,6 +389,8 @@ export const App: React.FC = () => {
               <div className="lg:col-span-2 space-y-6">
                 <DatasetHealthSummary
                   summary={healthSummary}
+                  selectedQuality={selectedQuality}
+                  onSelectQuality={setSelectedQuality}
                   onSubmitPipeline={handleSubmitDataset}
                   isSubmitting={isSubmitting}
                 />
