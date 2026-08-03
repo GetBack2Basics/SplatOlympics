@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen, ArrowRight, Sparkles, Check } from 'lucide-react';
+import { FolderOpen, ArrowRight, Sparkles, Check, Trash2 } from 'lucide-react';
 import { QualityPreset } from '../types';
 import { JobLocationBadge } from './JobLocationBadge';
 
@@ -16,6 +16,7 @@ interface ProjectSelectorBarProps {
   projects: ProjectItem[];
   selectedProjectId: string | null;
   onSelectProject: (id: string) => void;
+  onDeleteProject?: (id: string) => void;
   selectedQuality: QualityPreset;
   onSelectQuality: (quality: QualityPreset) => void;
   onGenerateModel: () => void;
@@ -26,6 +27,7 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
   projects,
   selectedProjectId,
   onSelectProject,
+  onDeleteProject,
   selectedQuality,
   onSelectQuality,
   onGenerateModel,
@@ -56,7 +58,7 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
           </div>
         </div>
 
-        {/* Project Selector Dropdown */}
+        {/* Project Selector Dropdown & Delete Button */}
         <div className="flex items-center space-x-2">
           <span className="text-xs font-bold text-slate-400 uppercase font-mono">Select Project:</span>
           <select
@@ -64,12 +66,24 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
             onChange={(e) => onSelectProject(e.target.value)}
             className="bg-slate-900 border border-slate-700 text-splat-neonCyan text-xs font-bold font-mono px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-splat-neonCyan transition-all cursor-pointer"
           >
+            {projects.length === 0 && <option value="">No projects available</option>}
             {projects.map((p) => (
               <option key={p.id} value={p.id} className="bg-slate-950 text-slate-200">
                 {p.name} ({p.photoCount} Photos)
               </option>
             ))}
           </select>
+
+          {onDeleteProject && activeProject && (
+            <button
+              onClick={() => onDeleteProject(activeProject.id)}
+              className="p-2 bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-300 hover:text-white rounded-xl transition-all shadow-md active:scale-95 flex items-center space-x-1 text-xs font-bold"
+              title={`Delete project "${activeProject.name}" and its 3D model files`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete Project</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -90,7 +104,7 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
             </p>
           </div>
 
-          <div className="text-right">
+          <div className="flex items-center space-x-3">
             <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-1 rounded-full font-bold">
               Ready for 3D Reconstruction
             </span>

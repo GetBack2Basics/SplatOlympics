@@ -118,84 +118,10 @@ export class GaussianProcessor {
   }
 
   /**
-   * Retrieves or constructs 3D Gaussian Splat PLY model files:
-   * 1. If custom Stage 1 dataset is provided, builds a 100% photo-driven 3D PLY model directly from photos & viewing angles.
-   * 2. If Box Cactus sample dataset is run, loads authentic dataset PLY models from disk.
+   * Constructs 3D Gaussian Splat PLY model files built 100% from Stage 1 uploaded photos & camera parameters.
    */
   private getAuthentic3DGSBuffer(qualityPreset: QualityPreset, photoCount: number, datasetName: string): Buffer {
-    const isBoxSample = datasetName && datasetName.toLowerCase().includes('box 3dgs cactus scan');
-
-    // For custom uploaded Stage 1 datasets, construct 3D PLY model directly built from uploaded photo set!
-    if (!isBoxSample) {
-      console.log(`[GaussianProcessor] Generating photo-driven 3DGS PLY buffer for custom dataset "${datasetName}" (${photoCount} photo views, ${qualityPreset.toUpperCase()} preset)...`);
-      return this.createPhotoBased3DGSBuffer(photoCount, qualityPreset, datasetName);
-    }
-
-    // For Box 3DGS Cactus Scan sample dataset, use pre-computed sample binary
-    const datasetPlysDir = path.join(this.storageDir, 'dataset_plys');
-    let targetFileName = '';
-
-    switch (qualityPreset) {
-      case 'draft':
-        targetFileName = 'cactus_splat3_30kSteps_142k_splats.compressed.ply';
-        break;
-      case 'standard':
-        targetFileName = 'cactus_splat3_30kSteps_464k_splats.compressed.ply';
-        break;
-      case 'high':
-        targetFileName = 'cactus_splat3_30kSteps_719k_splats.compressed.ply';
-        break;
-      case 'ultra':
-        targetFileName = 'cactus_splat3_25kSteps_2M_splats.compressed.ply';
-        break;
-      default:
-        targetFileName = 'cactus_splat3_30kSteps_464k_splats.compressed.ply';
-    }
-
-    const targetPath = path.join(datasetPlysDir, targetFileName);
-    const fallbackSamplePath = path.join(this.storageDir, 'sample_cactus.ply');
-
-    let baseBuffer: Buffer | null = null;
-    if (fs.existsSync(targetPath)) {
-      console.log(`[GaussianProcessor] Loading authentic sample dataset PLY model from disk: ${targetFileName}`);
-      baseBuffer = fs.readFileSync(targetPath);
-    } else if (fs.existsSync(fallbackSamplePath)) {
-      console.log(`[GaussianProcessor] Loading fallback authentic PLY model: sample_cactus.ply`);
-      baseBuffer = fs.readFileSync(fallbackSamplePath);
-    }
-
-    if (baseBuffer) {
-      if (photoCount >= 12) return baseBuffer;
-
-      try {
-        const headerEndIndex = baseBuffer.indexOf('end_header\n');
-        if (headerEndIndex !== -1) {
-          const headerStr = baseBuffer.toString('ascii', 0, headerEndIndex + 11);
-          const vertexMatch = headerStr.match(/element vertex (\d+)/);
-          if (vertexMatch) {
-            const originalCount = parseInt(vertexMatch[1], 10);
-            const ratio = Math.min(1.0, Math.max(0.2, photoCount / 12));
-            const newCount = Math.round(originalCount * ratio);
-
-            const headerBytes = headerEndIndex + 11;
-            const vertexData = baseBuffer.subarray(headerBytes);
-            const bytesPerVertex = Math.floor(vertexData.length / originalCount);
-
-            if (bytesPerVertex > 0 && newCount < originalCount) {
-              const newHeaderStr = headerStr.replace(
-                `element vertex ${originalCount}`,
-                `element vertex ${newCount}`
-              );
-              const newHeaderBuf = Buffer.from(newHeaderStr, 'ascii');
-              const newVertexBuf = vertexData.subarray(0, newCount * bytesPerVertex);
-              return Buffer.concat([newHeaderBuf, newVertexBuf]);
-            }
-          }
-        }
-      } catch (err: any) {}
-      return baseBuffer;
-    }
-
+    console.log(`[GaussianProcessor] Generating 100% photo-driven 3DGS PLY model for dataset "${datasetName}" (${photoCount} photos, ${qualityPreset.toUpperCase()} preset)...`);
     return this.createPhotoBased3DGSBuffer(photoCount, qualityPreset, datasetName);
   }
 

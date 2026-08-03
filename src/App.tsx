@@ -29,11 +29,11 @@ export const App: React.FC = () => {
     return (localStorage.getItem('splat_active_stage') as any) || 'stage1';
   });
   const [selectedModelUrl, setSelectedModelUrl] = useState<string>(() => {
-    return localStorage.getItem('splat_selected_model_url') || '/models/sample_cactus.ply';
+    return localStorage.getItem('splat_selected_model_url') || '';
   });
   const [photos, setPhotos] = useState<ValidatedPhoto[]>([]);
   const [datasetName, setDatasetName] = useState<string>(() => {
-    return localStorage.getItem('splat_dataset_name') || 'Box 3DGS Cactus Scan';
+    return localStorage.getItem('splat_dataset_name') || '';
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +43,7 @@ export const App: React.FC = () => {
 
   // System Reset Handler
   const handleResetAllData = async () => {
-    if (!window.confirm('Delete all old data, saved projects, jobs, uploaded images, and generated PLY models?')) return;
+    if (!window.confirm('Delete all old data, saved projects, jobs, uploaded images, sample boxes, and generated PLY models?')) return;
     try {
       await fetch('/api/system/reset', { method: 'POST' });
       localStorage.clear();
@@ -52,10 +52,11 @@ export const App: React.FC = () => {
       setProjects([]);
       setSelectedProjectId(null);
       setSelectedModelUrl('');
+      setDatasetName('');
       setActiveStage('stage1');
       setNotification({
         type: 'success',
-        message: 'Purged all old projects, jobs, uploaded files, and PLY models. System refreshed!',
+        message: 'Purged all old projects, jobs, sample boxes, uploaded files, and PLY models. System refreshed!',
       });
     } catch (err: any) {
       setNotification({ type: 'error', message: `Reset failed: ${err.message}` });
@@ -68,23 +69,42 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {}
     }
-    return [
-      {
-        id: 'ds_box_cactus_001',
-        name: 'Box 3DGS Cactus Scan',
-        photoCount: 12,
-        createdAt: Date.now() - 3600000,
-        lastPlyUrl: '/models/sample_cactus.ply',
-      },
-    ];
+    return [];
   });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
-    return localStorage.getItem('splat_selected_project_id') || 'ds_box_cactus_001';
+    return localStorage.getItem('splat_selected_project_id') || null;
   });
+
+  // Delete Individual Project Handler
+  const handleDeleteProject = async (id: string) => {
+    const proj = projects.find((p) => p.id === id);
+    if (!proj) return;
+    if (!window.confirm(`Delete project "${proj.name}" and all associated files?`)) return;
+
+    try {
+      await fetch(`/api/project/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+
+    const updated = projects.filter((p) => p.id !== id);
+    setProjects(updated);
+    localStorage.setItem('splat_projects', JSON.stringify(updated));
+
+    if (selectedProjectId === id) {
+      const nextId = updated.length > 0 ? updated[0].id : null;
+      setSelectedProjectId(nextId);
+      if (nextId) localStorage.setItem('splat_selected_project_id', nextId);
+      else localStorage.removeItem('splat_selected_project_id');
+    }
+
+    setNotification({
+      type: 'success',
+      message: `Project "${proj.name}" deleted successfully.`,
+    });
+  };
 
   // Stage 2 Pipeline State
   const [jobs, setJobs] = useState<PipelineJob[]>([]);
@@ -476,8 +496,6 @@ export const App: React.FC = () => {
                   summary={healthSummary}
                   datasetName={datasetName}
                   onUpdateDatasetName={setDatasetName}
-                  selectedQuality={selectedQuality}
-                  onSelectQuality={setSelectedQuality}
                   onSubmitPipeline={handleCreateProjectInStage1}
                   isSubmitting={isSubmitting}
                 />
@@ -494,6 +512,7 @@ export const App: React.FC = () => {
               projects={projects}
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
+              onDeleteProject={handleDeleteProject}
               selectedQuality={selectedQuality}
               onSelectQuality={setSelectedQuality}
               onGenerateModel={handleGenerateModelInStage2}

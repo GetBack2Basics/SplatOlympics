@@ -330,19 +330,17 @@ app.post('/api/system/reset', (_req: Request, res: Response) => {
     datasetStore.clear();
     jobQueue.clearAllJobs();
 
-    // Clear uploaded models (except dataset_plys templates)
+    // Clear all uploaded models unconditionally
     const modelsDir = path.join(process.cwd(), 'uploads', 'models');
     if (fs.existsSync(modelsDir)) {
       const files = fs.readdirSync(modelsDir);
       files.forEach((file) => {
-        if (file !== 'dataset_plys') {
-          const filePath = path.join(modelsDir, file);
-          try {
-            if (fs.statSync(filePath).isFile()) {
-              fs.unlinkSync(filePath);
-            }
-          } catch (e) {}
-        }
+        const filePath = path.join(modelsDir, file);
+        try {
+          if (fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {}
       });
     }
 
@@ -361,9 +359,34 @@ app.post('/api/system/reset', (_req: Request, res: Response) => {
       });
     }
 
-    res.json({ success: true, message: 'All old data, projects, jobs, and generated PLY files deleted successfully.' });
+    res.json({ success: true, message: 'All old data, projects, jobs, sample boxes, and generated PLY files deleted successfully.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'System reset failed' });
+  }
+});
+
+// Delete individual project endpoint
+app.delete('/api/project/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    datasetStore.delete(id);
+
+    // Delete associated models
+    const modelsDir = path.join(process.cwd(), 'uploads', 'models');
+    if (fs.existsSync(modelsDir)) {
+      const files = fs.readdirSync(modelsDir);
+      files.forEach((file) => {
+        if (file.includes(id)) {
+          try {
+            fs.unlinkSync(path.join(modelsDir, file));
+          } catch (e) {}
+        }
+      });
+    }
+
+    res.json({ success: true, message: `Project ${id} deleted successfully.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete project' });
   }
 });
 

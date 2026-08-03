@@ -6,8 +6,6 @@ interface DatasetHealthSummaryProps {
   summary: HealthSummaryType;
   datasetName: string;
   onUpdateDatasetName: (name: string) => void;
-  selectedQuality: QualityPreset;
-  onSelectQuality: (quality: QualityPreset) => void;
   onSubmitPipeline: () => void;
   isSubmitting?: boolean;
 }
@@ -16,20 +14,11 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
   summary,
   datasetName,
   onUpdateDatasetName,
-  selectedQuality,
-  onSelectQuality,
   onSubmitPipeline,
   isSubmitting,
 }) => {
   const isReady = summary.isReadyForSplatting;
   const healthScore = summary.healthScore;
-
-  const QUALITY_OPTIONS: { id: QualityPreset; label: string; splats: string; desc: string }[] = [
-    { id: 'draft', label: 'Draft', splats: '142K Splats', desc: '10k steps (Fast test)' },
-    { id: 'standard', label: 'Standard', splats: '464K Splats', desc: '30k steps (Balanced)' },
-    { id: 'high', label: 'High', splats: '719K Splats', desc: '30k steps (Sharp details)' },
-    { id: 'ultra', label: 'Ultra 8K', splats: '2.0M Splats', desc: 'Maximum photorealistic density' },
-  ];
 
   return (
     <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between h-full">
@@ -68,7 +57,7 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
               type="text"
               value={datasetName}
               onChange={(e) => onUpdateDatasetName(e.target.value)}
-              placeholder="e.g. Box 3DGS Cactus Scan"
+              placeholder="e.g. My 3D Reconstruction Project"
               className="flex-1 bg-slate-950 border border-slate-700 focus:border-splat-neonCyan text-white text-xs font-bold px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-splat-neonCyan transition-all"
             />
             <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-1.5 rounded-xl font-bold">
@@ -117,40 +106,6 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
               />
             </svg>
             <span className="absolute text-[11px] font-mono font-bold text-slate-200">{healthScore}%</span>
-          </div>
-        </div>
-
-        {/* Quality Preset Selector Widget */}
-        <div className="mb-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
-              <Sliders className="w-3.5 h-3.5 text-splat-neonCyan" />
-              <span>3D Reconstruction Quality</span>
-            </span>
-            <span className="text-[10px] font-mono text-splat-neonGreen font-bold bg-slate-900 border border-slate-700 px-2 py-0.5 rounded-md">
-              {QUALITY_OPTIONS.find((q) => q.id === selectedQuality)?.splats}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {QUALITY_OPTIONS.map((q) => (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => onSelectQuality(q.id)}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
-                  selectedQuality === q.id
-                    ? 'bg-slate-900 border-splat-neonCyan text-white shadow-lg ring-1 ring-splat-neonCyan/40'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs font-bold font-mono">{q.label}</span>
-                  <span className="text-[9px] font-mono font-extrabold text-splat-neonGreen">{q.splats}</span>
-                </div>
-                <p className="text-[10px] text-slate-500 truncate">{q.desc}</p>
-              </button>
-            ))}
           </div>
         </div>
 
