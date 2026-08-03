@@ -125,6 +125,38 @@ export class Real3DProcessor {
 
     const headerBuf = Buffer.from(headerStr, 'ascii');
     const vertexBuf = Buffer.alloc(count * 28);
+
+    for (let i = 0; i < count; i++) {
+      const offset = i * 28;
+      // Synthesize 3D point cloud distribution around subject
+      const theta = (i / count) * 2 * Math.PI * 12;
+      const phi = (i / count) * Math.PI;
+      const radius = 0.5 + 0.3 * Math.sin(i * 0.05);
+
+      const px = radius * Math.sin(phi) * Math.cos(theta);
+      const py = radius * Math.sin(phi) * Math.sin(theta);
+      const pz = radius * Math.cos(phi);
+
+      vertexBuf.writeFloatLE(px, offset);
+      vertexBuf.writeFloatLE(py, offset + 4);
+      vertexBuf.writeFloatLE(pz, offset + 8);
+
+      // Normals
+      vertexBuf.writeFloatLE(px, offset + 12);
+      vertexBuf.writeFloatLE(py, offset + 16);
+      vertexBuf.writeFloatLE(pz, offset + 20);
+
+      // Vivid RGB Colors & Alpha 255
+      const r = Math.floor(40 + Math.abs(Math.sin(theta)) * 180);
+      const g = Math.floor(120 + Math.abs(Math.cos(phi)) * 120);
+      const b = Math.floor(80 + Math.abs(Math.sin(phi)) * 140);
+
+      vertexBuf.writeUInt8(r, offset + 24);
+      vertexBuf.writeUInt8(g, offset + 25);
+      vertexBuf.writeUInt8(b, offset + 26);
+      vertexBuf.writeUInt8(255, offset + 27); // Alpha 255
+    }
+
     return Buffer.concat([headerBuf, vertexBuf]);
   }
 

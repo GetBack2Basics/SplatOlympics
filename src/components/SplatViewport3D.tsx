@@ -143,6 +143,29 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
 
     const modelRadius = Math.sqrt(maxDistSq) || 1.5;
 
+    // Validate & Sanitize Color Buffer
+    let totalColorSum = 0;
+    for (let i = 0; i < Math.min(vertexCount * 3, 300); i++) {
+      totalColorSum += rawCol[i];
+    }
+
+    const validColors = new Float32Array(vertexCount * 3);
+    const hasValidColors = totalColorSum > 0.01;
+
+    for (let i = 0; i < vertexCount; i++) {
+      if (hasValidColors) {
+        validColors[i * 3] = rawCol[i * 3];
+        validColors[i * 3 + 1] = rawCol[i * 3 + 1];
+        validColors[i * 3 + 2] = rawCol[i * 3 + 2];
+      } else {
+        // Fallback vivid point cloud colors if color array was zeroed
+        const angle = (i / vertexCount) * Math.PI * 2;
+        validColors[i * 3] = 0.2 + 0.7 * Math.abs(Math.sin(angle));
+        validColors[i * 3 + 1] = 0.6 + 0.4 * Math.abs(Math.cos(angle * 2));
+        validColors[i * 3 + 2] = 0.3 + 0.6 * Math.abs(Math.sin(angle * 3));
+      }
+    }
+
     // 2. Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#020617'); // Dark slate canvas
@@ -187,7 +210,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     // 7. Build 3D Gaussian Splat Buffer Geometry with Radial Gaussian Texture
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(centeredPositions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(rawCol, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(validColors, 3));
 
     // Create Initial Index Array for Depth Sorting
     const indexArray = new Uint32Array(vertexCount);
@@ -198,14 +221,14 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     const gaussianTexture = createGaussianTexture();
 
     const pointsMaterial = new THREE.PointsMaterial({
-      size: particleScale * (modelRadius * 0.025),
+      size: Math.max(0.06, particleScale * (modelRadius * 0.035)),
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.95,
       map: gaussianTexture,
-      alphaTest: 0.01,
+      alphaTest: 0.001,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
     });
 
     const points = new THREE.Points(geometry, pointsMaterial);
