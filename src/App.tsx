@@ -22,7 +22,7 @@ import {
   calculateDatasetHealth,
 } from './utils/qualityAnalyzer';
 import { loadBoxSampleDataset } from './utils/sampleDataset';
-import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight, Terminal } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
@@ -38,6 +38,7 @@ export const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Projects list state (Stage 1 creates projects, Stage 2 selects projects)
@@ -227,7 +228,7 @@ export const App: React.FC = () => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId));
   };
 
-  // Stage 1: Create Project & Continue to Stage 2
+  // Stage 1: Save Project & Go to Stage 2
   const handleCreateProjectInStage1 = async () => {
     if (photos.length === 0) return;
     setIsSubmitting(true);
@@ -247,10 +248,10 @@ export const App: React.FC = () => {
 
       setNotification({
         type: 'success',
-        message: `Project "${newProj.name}" created! Select quality preset in Stage 2 to generate 3D model.`,
+        message: `Project "${newProj.name}" saved! Choose quality in Stage 2 to create 3D PLY/SPLAT model.`,
       });
     } catch (err: any) {
-      setNotification({ type: 'error', message: `Project creation failed: ${err.message}` });
+      setNotification({ type: 'error', message: `Project saving failed: ${err.message}` });
     } finally {
       setIsSubmitting(false);
     }
@@ -280,7 +281,7 @@ export const App: React.FC = () => {
         setActiveJobId(data.job.id);
         setNotification({
           type: 'success',
-          message: `Job created! Processing 3D Splatting for "${activeProj.name}" [${selectedQuality.toUpperCase()}]...`,
+          message: `3D Reconstruction Job launched for "${activeProj.name}" [${selectedQuality.toUpperCase()}]!`,
         });
       }
     } catch (err: any) {
@@ -315,7 +316,7 @@ export const App: React.FC = () => {
       setActiveStage('stage1');
       setNotification({
         type: 'success',
-        message: 'Loaded Box "サボテンGS" raw images into Stage 1! Click "Create Project & Proceed to Stage 2" to continue.',
+        message: 'Loaded Box "サボテンGS" raw images into Stage 1! Click "Save Project & Go to Stage 2" to continue.',
       });
     } catch (err: any) {
       setNotification({ type: 'error', message: `Sample dataset loading failed: ${err.message}` });
@@ -347,7 +348,7 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation Stage Tabs (Separate Pages) */}
+          {/* Navigation Stage Tabs */}
           <div className="flex items-center space-x-2 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveStage('stage1')}
@@ -358,7 +359,7 @@ export const App: React.FC = () => {
               }`}
             >
               <Camera className="w-4 h-4" />
-              <span>Stage 1: Load Photos & Create Project</span>
+              <span>Stage 1: Load Photos & Save Project</span>
             </button>
 
             <button
@@ -431,10 +432,11 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* ================= STAGE 1 PAGE: Load Photos & Create Project ================= */}
+        {/* ================= STAGE 1 PAGE: Load Photos & Save Project ================= */}
         {activeStage === 'stage1' && (
           <div className="space-y-6">
             <BentoGrid>
+              {/* Left Column: Dropzone & Radar */}
               <div className="space-y-6">
                 <DropzoneUpload
                   onFilesSelected={handleFilesSelected}
@@ -445,7 +447,16 @@ export const App: React.FC = () => {
                 <AngleCoverageRadar coverage={healthSummary.angleCoverage} />
               </div>
 
+              {/* Right Column: Photo Grid Preview on Top Right, then Save Project & Go to Stage 2 */}
               <div className="lg:col-span-2 space-y-6">
+                {/* Dataset Photo Grid Preview on Top Right */}
+                <PhotoGridPreview
+                  photos={photos}
+                  onDeletePhoto={handleDeletePhoto}
+                  onUpdateAngleSector={handleUpdateSector}
+                />
+
+                {/* Dataset Health Summary & Save Project Button Below Photo Grid */}
                 <DatasetHealthSummary
                   summary={healthSummary}
                   datasetName={datasetName}
@@ -454,11 +465,6 @@ export const App: React.FC = () => {
                   onSelectQuality={setSelectedQuality}
                   onSubmitPipeline={handleCreateProjectInStage1}
                   isSubmitting={isSubmitting}
-                />
-                <PhotoGridPreview
-                  photos={photos}
-                  onDeletePhoto={handleDeletePhoto}
-                  onUpdateAngleSector={handleUpdateSector}
                 />
               </div>
             </BentoGrid>
@@ -624,13 +630,43 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-center text-xs font-mono text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
+      {/* Footer with Build Timestamp & Global Minimized Log Console Button */}
+      <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-xs font-mono text-slate-500 max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
         <span>SplatOlympics Arena v2.0 • Gaussian Splatting Platform</span>
-        <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-md text-slate-400">
-          Build: {typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '202608031030'}
-        </span>
+
+        <div className="flex items-center space-x-3">
+          {/* View Log Button (Bottom Right, directly to the left of Build Date) */}
+          <button
+            onClick={() => setIsLogDrawerOpen(!isLogDrawerOpen)}
+            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold font-mono transition-all flex items-center space-x-2 shadow-md ${
+              isLogDrawerOpen
+                ? 'bg-splat-neonCyan text-black border-splat-neonCyan ring-2 ring-splat-neonCyan/40 shadow-splat-neonCyan/20'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+            }`}
+            title="Open/Close Global Live Telemetry & Console Log Viewer"
+          >
+            <Terminal className="w-4 h-4 text-splat-neonCyan" />
+            <span>View Log ({activeJob ? activeJob.logs.length : 0})</span>
+            {activeJob && activeJob.status === 'processing' && (
+              <span className="w-2 h-2 rounded-full bg-splat-neonGreen animate-ping" />
+            )}
+          </button>
+
+          <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-md text-slate-400 font-mono">
+            Build: {typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '202608031030'}
+          </span>
+        </div>
       </footer>
+
+      {/* Floating Global Live Console Log Drawer (Available for ALL sections) */}
+      {isLogDrawerOpen && (
+        <div className="fixed bottom-16 right-4 z-50 w-full max-w-xl shadow-2xl animate-in slide-in-from-bottom-5 duration-200">
+          <LiveConsoleLog
+            logs={activeJob ? activeJob.logs : []}
+            onClose={() => setIsLogDrawerOpen(false)}
+          />
+        </div>
+      )}
 
       {/* Live WebRTC Camera Modal */}
       <CameraCaptureModal
@@ -643,4 +679,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

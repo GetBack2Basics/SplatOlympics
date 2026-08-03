@@ -179,7 +179,7 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
         </div>
       </div>
 
-      {/* Stage 1 Action Button: Create Project & Proceed to Stage 2 */}
+      {/* Stage 1 Action Button: Save Project & Go to Stage 2 */}
       <button
         onClick={onSubmitPipeline}
         disabled={summary.totalPhotos === 0 || isSubmitting}
@@ -189,7 +189,7 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
             : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
         }`}
       >
-        <span>{isSubmitting ? 'Creating Project...' : 'Create Project & Proceed to Stage 2 →'}</span>
+        <span>{isSubmitting ? 'Saving Project...' : 'Save Project & Go to Stage 2 →'}</span>
         <ArrowRight className="w-4 h-4" />
       </button>
     </div>

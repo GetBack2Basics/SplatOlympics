@@ -5,9 +5,10 @@ import { Terminal, Search, Trash2 } from 'lucide-react';
 interface LiveConsoleLogProps {
   logs: LogMessage[];
   onClearLogs?: () => void;
+  onClose?: () => void;
 }
 
-export const LiveConsoleLog: React.FC<LiveConsoleLogProps> = ({ logs, onClearLogs }) => {
+export const LiveConsoleLog: React.FC<LiveConsoleLogProps> = ({ logs, onClearLogs, onClose }) => {
   const [filterText, setFilterText] = useState('');
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -22,20 +23,20 @@ export const LiveConsoleLog: React.FC<LiveConsoleLogProps> = ({ logs, onClearLog
   );
 
   return (
-    <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col h-full min-h-[380px]">
+    <div className="bg-splat-cardBg/95 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col h-full min-h-[360px]">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
         <div className="flex items-center space-x-2">
-          <div className="p-2 bg-slate-900 rounded-xl border border-slate-800 text-slate-300">
+          <div className="p-2 bg-slate-900 rounded-xl border border-slate-800 text-splat-neonCyan">
             <Terminal className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-sm font-bold tracking-wide uppercase text-slate-200">Live Console Log</h2>
-            <p className="text-xs text-slate-400">COLMAP & Splatting Iteration Telemetry</p>
+            <p className="text-xs text-slate-400">COLMAP & Splatting Iteration Telemetry ({logs.length})</p>
           </div>
         </div>
 
-        {/* Filter Input */}
+        {/* Filter Input & Close Button */}
         <div className="flex items-center space-x-2">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -44,9 +45,19 @@ export const LiveConsoleLog: React.FC<LiveConsoleLogProps> = ({ logs, onClearLog
               placeholder="Filter logs..."
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1 text-xs text-slate-300 focus:outline-none focus:border-splat-neonCyan font-mono"
+              className="bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1 text-xs text-slate-300 focus:outline-none focus:border-splat-neonCyan font-mono w-32 sm:w-44"
             />
           </div>
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-all text-xs font-mono"
+              title="Close log viewer"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
