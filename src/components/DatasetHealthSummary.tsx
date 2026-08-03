@@ -4,6 +4,8 @@ import { Activity, ShieldCheck, AlertCircle, ArrowRight, CheckCircle2, Sparkles,
 
 interface DatasetHealthSummaryProps {
   summary: HealthSummaryType;
+  datasetName: string;
+  onUpdateDatasetName: (name: string) => void;
   selectedQuality: QualityPreset;
   onSelectQuality: (quality: QualityPreset) => void;
   onSubmitPipeline: () => void;
@@ -12,6 +14,8 @@ interface DatasetHealthSummaryProps {
 
 export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
   summary,
+  datasetName,
+  onUpdateDatasetName,
   selectedQuality,
   onSelectQuality,
   onSubmitPipeline,
@@ -38,7 +42,7 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold tracking-wide uppercase text-slate-200">Splatting Readiness</h2>
-              <p className="text-xs text-slate-400">3D Dataset Health & Quality Score</p>
+              <p className="text-xs text-slate-400">Stage 1: Photo Collector & Job Config</p>
             </div>
           </div>
 
@@ -51,6 +55,25 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
           >
             {isReady ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5 animate-pulse" />}
             <span>{isReady ? '3D Pipeline Ready' : 'Incomplete Dataset'}</span>
+          </div>
+        </div>
+
+        {/* Configurable Job Name Input (Stage 1) */}
+        <div className="bg-slate-900/90 border border-slate-800 p-3.5 rounded-2xl space-y-1.5 mb-4">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            Stage 1 Job Name (Configurable & Savable)
+          </label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={datasetName}
+              onChange={(e) => onUpdateDatasetName(e.target.value)}
+              placeholder="e.g. Box 3DGS Cactus Scan"
+              className="flex-1 bg-slate-950 border border-slate-700 focus:border-splat-neonCyan text-white text-xs font-bold px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-splat-neonCyan transition-all"
+            />
+            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-1.5 rounded-xl font-bold">
+              Saved
+            </span>
           </div>
         </div>
 

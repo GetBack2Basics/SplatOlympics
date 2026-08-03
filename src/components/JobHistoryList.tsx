@@ -1,6 +1,7 @@
 import React from 'react';
 import { PipelineJob } from '../types';
 import { Layers, Download, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { JobLocationBadge } from './JobLocationBadge';
 
 interface JobHistoryListProps {
   jobs: PipelineJob[];
@@ -86,7 +87,13 @@ export const JobHistoryList: React.FC<JobHistoryListProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>{job.datasetName} ({job.photoCount} photos)</span>
+                  <JobLocationBadge
+                    jobId={job.id}
+                    datasetName={job.datasetName}
+                    qualityPreset={job.qualityPreset}
+                    plyFileUrl={job.plyFileUrl}
+                    showQuality={true}
+                  />
                   <span className="font-mono">{job.progressPercent}%</span>
                 </div>
 

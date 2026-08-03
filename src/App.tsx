@@ -10,6 +10,7 @@ import { LiveConsoleLog } from './components/LiveConsoleLog';
 import { JobHistoryList } from './components/JobHistoryList';
 import { GcpCostMonitor } from './components/GcpCostMonitor';
 import { SplatViewport3D } from './components/SplatViewport3D';
+import { JobLocationBadge } from './components/JobLocationBadge';
 import { PipelineSocketService } from './services/pipelineSocket';
 import { ValidatedPhoto, AngleSector, PipelineJob, QualityPreset } from './types';
 import { extractPhotoMetadata } from './utils/exifParser';
@@ -31,7 +32,9 @@ export const App: React.FC = () => {
   });
   const [photos, setPhotos] = useState<ValidatedPhoto[]>([]);
   const [datasetId] = useState(`ds_${Math.random().toString(36).substr(2, 6)}`);
-  const [datasetName] = useState(`3D Target Session ${new Date().toLocaleDateString()}`);
+  const [datasetName, setDatasetName] = useState<string>(() => {
+    return localStorage.getItem('splat_dataset_name') || 'Box 3DGS Cactus Scan';
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -45,6 +48,11 @@ export const App: React.FC = () => {
   const [socketService] = useState(() => new PipelineSocketService());
 
   const [selectedQuality, setSelectedQuality] = useState<QualityPreset>('standard');
+
+  // Save configurable dataset name to localStorage
+  useEffect(() => {
+    localStorage.setItem('splat_dataset_name', datasetName);
+  }, [datasetName]);
 
   // Safe schema version check without wiping user jobs or localStorage
   useEffect(() => {
@@ -372,9 +380,9 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* STAGE 1 VIEW: Multi-Angle Photo Ingestion */}
+        {/* STAGE 1 VIEW: Multi-Angle Photo Ingestion & Integrated Stage 2 */}
         {activeStage === 'stage1' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <BentoGrid>
               <div className="space-y-6">
                 <DropzoneUpload
@@ -389,6 +397,8 @@ export const App: React.FC = () => {
               <div className="lg:col-span-2 space-y-6">
                 <DatasetHealthSummary
                   summary={healthSummary}
+                  datasetName={datasetName}
+                  onUpdateDatasetName={setDatasetName}
                   selectedQuality={selectedQuality}
                   onSelectQuality={setSelectedQuality}
                   onSubmitPipeline={handleSubmitDataset}
@@ -401,6 +411,49 @@ export const App: React.FC = () => {
                 />
               </div>
             </BentoGrid>
+
+            {/* STAGE 2 INTEGRATED DIRECTLY UNDER STAGE 1 */}
+            <div className="pt-8 border-t border-slate-800 space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 bg-splat-neonPurple/10 border border-splat-neonPurple/30 rounded-lg text-splat-neonPurple">
+                    <Cpu className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
+                    Stage 2: Web Pipeline Processing Queue & Telemetry
+                  </h3>
+                </div>
+                <span className="text-xs font-mono text-slate-400">
+                  {jobs.length} Active / Completed Job(s)
+                </span>
+              </div>
+
+              {/* GCP Credit & Cost Monitor */}
+              <GcpCostMonitor />
+
+              {/* Top Grid: Job Monitor & Live Console Log */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <PipelineJobMonitor
+                  job={activeJob}
+                  onCancelJob={handleCancelJob}
+                  onInspectModel={(jobToInspect) => {
+                    if (jobToInspect.plyFileUrl) {
+                      setSelectedModelUrl(jobToInspect.plyFileUrl);
+                    }
+                    setActiveStage('stage3');
+                  }}
+                />
+                <LiveConsoleLog logs={activeJob ? activeJob.logs : []} />
+              </div>
+
+              {/* Bottom Grid: Job Queue Management History */}
+              <JobHistoryList
+                jobs={jobs}
+                activeJobId={activeJob ? activeJob.id : null}
+                onSelectJob={(id) => setActiveJobId(id)}
+                onStartNewJob={() => setActiveStage('stage1')}
+              />
+            </div>
           </div>
         )}
 

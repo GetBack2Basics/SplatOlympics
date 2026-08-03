@@ -1,6 +1,7 @@
 import React from 'react';
 import { PipelineJob, JobStage } from '../types';
 import { Cpu, Download, CheckCircle2, Play, Square, Layers, Flame, Gauge, Eye } from 'lucide-react';
+import { JobLocationBadge } from './JobLocationBadge';
 
 interface PipelineJobMonitorProps {
   job: PipelineJob | null;
@@ -59,10 +60,19 @@ export const PipelineJobMonitor: React.FC<PipelineJobMonitorProps> = ({ job, onC
               <Cpu className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-wide uppercase text-slate-200">
-                Job Monitor: <span className="font-mono text-splat-neonCyan">{job.id}</span>
-              </h2>
-              <p className="text-xs text-slate-400">Dataset: {job.datasetName} ({job.photoCount} Photos)</p>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-mono font-bold text-splat-neonCyan">{job.id}</span>
+                <span className="text-[10px] text-slate-500 font-mono">({job.photoCount} Photos)</span>
+              </div>
+              <div className="mt-0.5">
+                <JobLocationBadge
+                  jobId={job.id}
+                  datasetName={job.datasetName}
+                  qualityPreset={job.qualityPreset}
+                  plyFileUrl={job.plyFileUrl}
+                  showQuality={true}
+                />
+              </div>
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { parsePlyBuffer, ParsedPlyData } from '../utils/plyParser';
+import { JobLocationBadge } from './JobLocationBadge';
 import {
   Maximize2,
   Minimize2,
@@ -482,12 +483,10 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
           <div className="w-2.5 h-2.5 rounded-full bg-splat-neonGreen animate-pulse" />
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="text-xs font-bold text-slate-200 truncate max-w-[180px] sm:max-w-[240px]">
-                {datasetName}
-              </h3>
-              <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/40 px-1.5 py-0.5 rounded-md font-bold">
-                {customFilename || modelUrl.split('/').pop() || 'model.ply'}
-              </span>
+              <JobLocationBadge
+                datasetName={datasetName}
+                plyFileUrl={modelUrl}
+              />
             </div>
             <span className="text-[10px] font-mono text-slate-400">
               {parsedData ? `${parsedData.vertexCount.toLocaleString()} Gaussians` : '0 Gaussians'} • {fps} FPS
