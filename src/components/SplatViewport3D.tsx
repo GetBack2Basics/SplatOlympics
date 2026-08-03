@@ -84,9 +84,17 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     setIsLoading(true);
     setErrorMessage(null);
 
-    fetch(modelUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status} - Could not fetch PLY file at ${modelUrl}`);
+    const targetUrl = modelUrl || '/models/sample_cactus.ply';
+
+    fetch(targetUrl)
+      .then(async (res) => {
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok || contentType.includes('text/html')) {
+          console.warn(`[SplatViewport3D] ${targetUrl} unavailable, loading bundled /models/sample_cactus.ply`);
+          const fallbackRes = await fetch('/models/sample_cactus.ply');
+          if (!fallbackRes.ok) throw new Error(`HTTP ${fallbackRes.status} - Could not fetch fallback PLY asset`);
+          return fallbackRes.arrayBuffer();
+        }
         return res.arrayBuffer();
       })
       .then((buffer) => {

@@ -27,7 +27,7 @@ export const App: React.FC = () => {
     return (localStorage.getItem('splat_active_stage') as any) || 'stage1';
   });
   const [selectedModelUrl, setSelectedModelUrl] = useState<string>(() => {
-    return localStorage.getItem('splat_selected_model_url') || '/uploads/models/sample_cactus.ply';
+    return localStorage.getItem('splat_selected_model_url') || '/models/sample_cactus.ply';
   });
   const [photos, setPhotos] = useState<ValidatedPhoto[]>([]);
   const [datasetId] = useState(`ds_${Math.random().toString(36).substr(2, 6)}`);
@@ -46,7 +46,7 @@ export const App: React.FC = () => {
 
   // Auto-migrate & purge stale cache on schema version bump
   useEffect(() => {
-    const SCHEMA_VERSION = 'v3.2_real_photo_schema';
+    const SCHEMA_VERSION = 'v4.0_auto_build_date_real_ply_path';
     const currentVer = localStorage.getItem('splat_schema_version');
     if (currentVer !== SCHEMA_VERSION) {
       console.log('[SplatOlympics] Purging stale localStorage preview URLs and cache for schema:', SCHEMA_VERSION);
@@ -528,7 +528,7 @@ export const App: React.FC = () => {
       <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-center text-xs font-mono text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
         <span>SplatOlympics Arena v2.0 • Gaussian Splatting Platform</span>
         <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-md text-slate-400">
-          Build: 202608030745
+          Build: {typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '202608031030'}
         </span>
       </footer>
 
