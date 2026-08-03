@@ -11,6 +11,7 @@ import { JobHistoryList } from './components/JobHistoryList';
 import { GcpCostMonitor } from './components/GcpCostMonitor';
 import { SplatViewport3D } from './components/SplatViewport3D';
 import { JobLocationBadge } from './components/JobLocationBadge';
+import { ProjectSelectorBar, ProjectItem } from './components/ProjectSelectorBar';
 import { PipelineSocketService } from './services/pipelineSocket';
 import { ValidatedPhoto, AngleSector, PipelineJob, QualityPreset } from './types';
 import { extractPhotoMetadata } from './utils/exifParser';
@@ -21,7 +22,7 @@ import {
   calculateDatasetHealth,
 } from './utils/qualityAnalyzer';
 import { loadBoxSampleDataset } from './utils/sampleDataset';
-import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
@@ -31,7 +32,6 @@ export const App: React.FC = () => {
     return localStorage.getItem('splat_selected_model_url') || '/models/sample_cactus.ply';
   });
   const [photos, setPhotos] = useState<ValidatedPhoto[]>([]);
-  const [datasetId] = useState(`ds_${Math.random().toString(36).substr(2, 6)}`);
   const [datasetName, setDatasetName] = useState<string>(() => {
     return localStorage.getItem('splat_dataset_name') || 'Box 3DGS Cactus Scan';
   });
@@ -40,31 +40,53 @@ export const App: React.FC = () => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Projects list state (Stage 1 creates projects, Stage 2 selects projects)
+  const [projects, setProjects] = useState<ProjectItem[]>(() => {
+    const saved = localStorage.getItem('splat_projects');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return [
+      {
+        id: 'ds_box_cactus_001',
+        name: 'Box 3DGS Cactus Scan',
+        photoCount: 12,
+        createdAt: Date.now() - 3600000,
+        lastPlyUrl: '/models/sample_cactus.ply',
+      },
+    ];
+  });
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    return localStorage.getItem('splat_selected_project_id') || 'ds_box_cactus_001';
+  });
+
   // Stage 2 Pipeline State
   const [jobs, setJobs] = useState<PipelineJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(() => {
     return localStorage.getItem('splat_active_job_id') || null;
   });
   const [socketService] = useState(() => new PipelineSocketService());
-
   const [selectedQuality, setSelectedQuality] = useState<QualityPreset>('standard');
 
-  // Save configurable dataset name to localStorage
+  // Persistence effects
   useEffect(() => {
     localStorage.setItem('splat_dataset_name', datasetName);
   }, [datasetName]);
 
-  // Safe schema version check without wiping user jobs or localStorage
   useEffect(() => {
-    const SCHEMA_VERSION = 'v5.0_persistent_jobs_quality_presets';
-    const currentVer = localStorage.getItem('splat_schema_version');
-    if (currentVer !== SCHEMA_VERSION) {
-      console.log('[SplatOlympics] Updating schema version to:', SCHEMA_VERSION);
-      localStorage.setItem('splat_schema_version', SCHEMA_VERSION);
-    }
-  }, []);
+    localStorage.setItem('splat_projects', JSON.stringify(projects));
+  }, [projects]);
 
-  // Save state to localStorage whenever changed
+  useEffect(() => {
+    if (selectedProjectId) {
+      localStorage.setItem('splat_selected_project_id', selectedProjectId);
+    }
+  }, [selectedProjectId]);
+
   useEffect(() => {
     localStorage.setItem('splat_active_stage', activeStage);
   }, [activeStage]);
@@ -86,7 +108,7 @@ export const App: React.FC = () => {
     return jobs.find((j) => j.id === activeJobId) || jobs[0] || null;
   }, [jobs, activeJobId]);
 
-  // Compute dataset health dynamically
+  // Compute dataset health dynamically for Stage 1
   const healthSummary = useMemo(() => calculateDatasetHealth(photos), [photos]);
 
   // Initialize WebSocket stream and load existing jobs
@@ -114,9 +136,12 @@ export const App: React.FC = () => {
       },
       onJobCompleted: (completedJob) => {
         setJobs((prev) => prev.map((j) => (j.id === completedJob.id ? completedJob : j)));
+        if (completedJob.plyFileUrl) {
+          setSelectedModelUrl(completedJob.plyFileUrl);
+        }
         setNotification({
           type: 'success',
-          message: `3D Reconstruction Completed! Final PSNR: ${completedJob.telemetry.psnr} dB. PLY/SPLAT models ready.`,
+          message: `3D Reconstruction Completed for "${completedJob.datasetName}"! Model ready for Stage 3 inspection.`,
         });
       },
     });
@@ -127,7 +152,7 @@ export const App: React.FC = () => {
       .then((data) => {
         if (data.jobs && data.jobs.length > 0) {
           setJobs(data.jobs);
-          setActiveJobId(data.jobs[0].id);
+          if (!activeJobId) setActiveJobId(data.jobs[0].id);
         }
       })
       .catch(() => {});
@@ -137,7 +162,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Handle new photos selected or dropped
+  // Handle photos selected or dropped in Stage 1
   const handleFilesSelected = async (files: File[]) => {
     setIsAnalyzing(true);
     try {
@@ -167,7 +192,6 @@ export const App: React.FC = () => {
         });
       }
 
-      // Check duplicates against all photos
       const updatedPhotos = [...photos, ...newValidated];
       const hashCounts = new Map<string, number>();
       updatedPhotos.forEach((p) => {
@@ -203,19 +227,49 @@ export const App: React.FC = () => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId));
   };
 
-  // Submit Dataset to Stage 2 Pipeline Queue
-  const handleSubmitDataset = async () => {
+  // Stage 1: Create Project & Continue to Stage 2
+  const handleCreateProjectInStage1 = async () => {
     if (photos.length === 0) return;
     setIsSubmitting(true);
 
+    try {
+      const projId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const newProj: ProjectItem = {
+        id: projId,
+        name: datasetName || '3D Reconstruction Target',
+        photoCount: photos.length,
+        createdAt: Date.now(),
+      };
+
+      setProjects((prev) => [newProj, ...prev.filter((p) => p.id !== projId)]);
+      setSelectedProjectId(projId);
+      setActiveStage('stage2');
+
+      setNotification({
+        type: 'success',
+        message: `Project "${newProj.name}" created! Select quality preset in Stage 2 to generate 3D model.`,
+      });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: `Project creation failed: ${err.message}` });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Stage 2: Create 3D Model File at Chosen Quality
+  const handleGenerateModelInStage2 = async () => {
+    const activeProj = projects.find((p) => p.id === selectedProjectId) || projects[0];
+    if (!activeProj) return;
+
+    setIsSubmitting(true);
     try {
       const res = await fetch('/api/pipeline/job/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          datasetId,
-          datasetName,
-          photoCount: photos.length,
+          datasetId: activeProj.id,
+          datasetName: activeProj.name,
+          photoCount: activeProj.photoCount || photos.length || 12,
           qualityPreset: selectedQuality,
         }),
       });
@@ -224,20 +278,19 @@ export const App: React.FC = () => {
       if (data.job) {
         setJobs((prev) => [data.job, ...prev.filter((j) => j.id !== data.job.id)]);
         setActiveJobId(data.job.id);
-        setActiveStage('stage2');
         setNotification({
           type: 'success',
-          message: 'Job submitted! Switching to Stage 2: Web Pipeline Processing Queue...',
+          message: `Job created! Processing 3D Splatting for "${activeProj.name}" [${selectedQuality.toUpperCase()}]...`,
         });
       }
     } catch (err: any) {
-      setNotification({ type: 'error', message: `Submission failed: ${err.message}` });
+      setNotification({ type: 'error', message: `Model generation failed: ${err.message}` });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Load Sample Photo Batch from Box Cactus GS dataset into Stage 1
+  // Load Sample Photo Batch into Stage 1
   const handleLoadSampleBatch = async () => {
     setIsAnalyzing(true);
     try {
@@ -254,7 +307,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Load Steam Studio Cactus GS PLY Sample Dataset (Triggers pipeline & generates server model assets)
   const handleLoadSteamStudioSample = async () => {
     setIsAnalyzing(true);
     try {
@@ -263,7 +315,7 @@ export const App: React.FC = () => {
       setActiveStage('stage1');
       setNotification({
         type: 'success',
-        message: 'Loaded Box "サボテンGS" raw images into Stage 1! Click "Submit Dataset for 3D Splatting" to run pipeline.',
+        message: 'Loaded Box "サボテンGS" raw images into Stage 1! Click "Create Project & Proceed to Stage 2" to continue.',
       });
     } catch (err: any) {
       setNotification({ type: 'error', message: `Sample dataset loading failed: ${err.message}` });
@@ -278,7 +330,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-splat-bg text-slate-100 font-sans selection:bg-splat-neonCyan selection:text-black">
-      {/* Header Bar */}
+      {/* Header Navigation Bar */}
       <header className="sticky top-0 z-40 bg-splat-bg/80 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -295,7 +347,7 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation Stage Tabs */}
+          {/* Navigation Stage Tabs (Separate Pages) */}
           <div className="flex items-center space-x-2 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveStage('stage1')}
@@ -306,7 +358,7 @@ export const App: React.FC = () => {
               }`}
             >
               <Camera className="w-4 h-4" />
-              <span>Stage 1: Photo Collector</span>
+              <span>Stage 1: Load Photos & Create Project</span>
             </button>
 
             <button
@@ -318,7 +370,7 @@ export const App: React.FC = () => {
               }`}
             >
               <Cpu className="w-4 h-4" />
-              <span>Stage 2: Job Queue</span>
+              <span>Stage 2: Select Project & Create PLY/SPLAT</span>
               {jobs.filter((j) => j.status === 'processing').length > 0 && (
                 <span className="w-2 h-2 rounded-full bg-splat-neonGreen animate-ping" />
               )}
@@ -333,14 +385,13 @@ export const App: React.FC = () => {
               }`}
             >
               <Eye className="w-4 h-4" />
-              <span>Stage 3: 3D Inspector</span>
+              <span>Stage 3: View 3D PLY Model</span>
             </button>
           </div>
 
-          {/* Google Account Sign-In / Settings Modal Placeholder */}
           <button
             className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md"
-            title="Google Account Authentication & System Settings (Coming Soon)"
+            title="Google Account Authentication & System Settings"
           >
             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-rose-500 to-amber-500 p-0.5 flex items-center justify-center">
               <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
@@ -380,9 +431,9 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* STAGE 1 VIEW: Multi-Angle Photo Ingestion & Integrated Stage 2 */}
+        {/* ================= STAGE 1 PAGE: Load Photos & Create Project ================= */}
         {activeStage === 'stage1' && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             <BentoGrid>
               <div className="space-y-6">
                 <DropzoneUpload
@@ -401,7 +452,7 @@ export const App: React.FC = () => {
                   onUpdateDatasetName={setDatasetName}
                   selectedQuality={selectedQuality}
                   onSelectQuality={setSelectedQuality}
-                  onSubmitPipeline={handleSubmitDataset}
+                  onSubmitPipeline={handleCreateProjectInStage1}
                   isSubmitting={isSubmitting}
                 />
                 <PhotoGridPreview
@@ -411,59 +462,27 @@ export const App: React.FC = () => {
                 />
               </div>
             </BentoGrid>
-
-            {/* STAGE 2 INTEGRATED DIRECTLY UNDER STAGE 1 */}
-            <div className="pt-8 border-t border-slate-800 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="p-1.5 bg-splat-neonPurple/10 border border-splat-neonPurple/30 rounded-lg text-splat-neonPurple">
-                    <Cpu className="w-4 h-4" />
-                  </div>
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                    Stage 2: Web Pipeline Processing Queue & Telemetry
-                  </h3>
-                </div>
-                <span className="text-xs font-mono text-slate-400">
-                  {jobs.length} Active / Completed Job(s)
-                </span>
-              </div>
-
-              {/* GCP Credit & Cost Monitor */}
-              <GcpCostMonitor />
-
-              {/* Top Grid: Job Monitor & Live Console Log */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <PipelineJobMonitor
-                  job={activeJob}
-                  onCancelJob={handleCancelJob}
-                  onInspectModel={(jobToInspect) => {
-                    if (jobToInspect.plyFileUrl) {
-                      setSelectedModelUrl(jobToInspect.plyFileUrl);
-                    }
-                    setActiveStage('stage3');
-                  }}
-                />
-                <LiveConsoleLog logs={activeJob ? activeJob.logs : []} />
-              </div>
-
-              {/* Bottom Grid: Job Queue Management History */}
-              <JobHistoryList
-                jobs={jobs}
-                activeJobId={activeJob ? activeJob.id : null}
-                onSelectJob={(id) => setActiveJobId(id)}
-                onStartNewJob={() => setActiveStage('stage1')}
-              />
-            </div>
           </div>
         )}
 
-        {/* STAGE 2 VIEW: Job Queue Interface & Live Telemetry */}
+        {/* ================= STAGE 2 PAGE: Select Project & Create PLY/SPLAT Model ================= */}
         {activeStage === 'stage2' && (
           <div className="space-y-6">
+            {/* Project Selector & Quality Model Creation Bar */}
+            <ProjectSelectorBar
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelectProject={setSelectedProjectId}
+              selectedQuality={selectedQuality}
+              onSelectQuality={setSelectedQuality}
+              onGenerateModel={handleGenerateModelInStage2}
+              isGenerating={isSubmitting}
+            />
+
             {/* GCP Credit & Cost Monitor */}
             <GcpCostMonitor />
 
-            {/* Top Grid: Job Monitor & Live Console Log */}
+            {/* Top Grid: Active Job Monitor & Live Console Log */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <PipelineJobMonitor
                 job={activeJob}
@@ -478,7 +497,7 @@ export const App: React.FC = () => {
               <LiveConsoleLog logs={activeJob ? activeJob.logs : []} />
             </div>
 
-            {/* Bottom Grid: Job Queue Management History */}
+            {/* Bottom Grid: Reconstruction Job Queue & History List */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <JobHistoryList
@@ -489,7 +508,7 @@ export const App: React.FC = () => {
                 />
               </div>
 
-              {/* Box Sample Data Reference Card */}
+              {/* Box Sample Reference Card */}
               <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
                 <div>
                   <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-slate-800">
@@ -543,9 +562,10 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* STAGE 3 VIEW: Interactive 3D Viewport & WebGL Splat Inspector */}
+        {/* ================= STAGE 3 PAGE: View 3D PLY Model ================= */}
         {activeStage === 'stage3' && (
           <div className="space-y-6">
+            {/* Stage 3 Model Selector Header Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-xl">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-emerald-950/80 border border-emerald-500/40 text-splat-neonGreen rounded-xl">
@@ -553,35 +573,58 @@ export const App: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold uppercase tracking-wide text-slate-200 flex items-center gap-2">
-                    Stage 3: Interactive 3D Splat Inspector
+                    Stage 3: View Created 3D PLY Model
                     <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-900 border border-slate-700 text-splat-neonCyan rounded-full">
                       WebGL Three.js Renderer
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-400">Orbit controls, camera frustums & density inspection</p>
+                  <p className="text-xs text-slate-400">Viewing PLY created in Stage 2 by default (or choose existing model)</p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
+              {/* Model Selector Bar */}
+              <div className="flex flex-wrap items-center space-x-3">
+                <span className="text-xs font-bold text-slate-400 uppercase font-mono">Select 3D Model:</span>
+                <select
+                  value={selectedModelUrl}
+                  onChange={(e) => setSelectedModelUrl(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-splat-neonGreen text-xs font-bold font-mono px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-splat-neonGreen transition-all cursor-pointer max-w-xs truncate"
+                >
+                  <option value="/models/sample_cactus.ply">
+                    Box 3DGS Cactus Scan [STANDARD] (sample_cactus.ply)
+                  </option>
+                  {jobs
+                    .filter((j) => j.status === 'completed' && j.plyFileUrl)
+                    .map((j) => (
+                      <option key={j.id} value={j.plyFileUrl}>
+                        {j.datasetName} [{j.qualityPreset ? j.qualityPreset.toUpperCase() : 'STANDARD'}] ({j.plyFileUrl?.split('/').pop()})
+                      </option>
+                    ))}
+                </select>
+
                 <button
                   onClick={() => setActiveStage('stage2')}
-                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all"
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
                 >
-                  ← Back to Job Queue
+                  <span>← Back to Stage 2</span>
                 </button>
               </div>
             </div>
 
-            {/* 3D Splat Inspector Canvas */}
+            {/* 3D Splat Inspector Viewport */}
             <SplatViewport3D
               modelUrl={selectedModelUrl}
-              datasetName={activeJob ? activeJob.datasetName : '3D Reconstruction Target'}
+              datasetName={
+                activeJob
+                  ? `${activeJob.datasetName} [${(activeJob.qualityPreset || 'standard').toUpperCase()}]`
+                  : 'Box 3DGS Cactus Scan [STANDARD]'
+              }
             />
           </div>
         )}
       </main>
 
-      {/* Footer with Build Timestamp */}
+      {/* Footer */}
       <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-center text-xs font-mono text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
         <span>SplatOlympics Arena v2.0 • Gaussian Splatting Platform</span>
         <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded-md text-slate-400">
@@ -600,3 +643,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+
