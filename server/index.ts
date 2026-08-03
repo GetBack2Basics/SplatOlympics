@@ -461,9 +461,22 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
-httpServer.listen(Number(PORT), HOST, () => {
-  console.log(`=======================================================`);
-  console.log(`📸 SplatOlympics Gaussian Splatting Engine running on http://${HOST}:${PORT}`);
-  console.log(`⚡ WebSocket Job Telemetry Stream attached at ws://${HOST}:${PORT}/ws`);
-  console.log(`=======================================================`);
-});
+function startServer(port: number) {
+  const server = httpServer.listen(port, HOST, () => {
+    console.log(`=======================================================`);
+    console.log(`📸 SplatOlympics Gaussian Splatting Engine running on http://${HOST}:${port}`);
+    console.log(`⚡ WebSocket Job Telemetry Stream attached at ws://${HOST}:${port}/ws`);
+    console.log(`=======================================================`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Server] Port ${port} is occupied, automatically binding to next free port ${port + 1}...`);
+      startServer(port + 1);
+    } else {
+      console.error('[Server] Fatal server error:', err);
+    }
+  });
+}
+
+startServer(Number(PORT));

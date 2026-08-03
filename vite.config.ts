@@ -18,15 +18,21 @@ export default defineConfig({
     __BUILD_DATE__: JSON.stringify(getBuildTimestamp()),
   },
   server: {
-    port: 5173,
+    port: Number(process.env.VITE_PORT) || 5174,
+    strictPort: false,
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:3000',
+        ws: true,
         changeOrigin: true,
       },
     },
