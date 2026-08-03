@@ -84,6 +84,17 @@ export class SplatJobQueueManager {
     }
   }
 
+  public clearAllJobs() {
+    this.jobs.clear();
+    this.currentProcessingJobId = null;
+    try {
+      if (fs.existsSync(this.dbFilePath)) {
+        fs.unlinkSync(this.dbFilePath);
+      }
+    } catch (err) {}
+    this.broadcast({ type: 'JOBS_CLEARED' });
+  }
+
   public registerWsClient(ws: WebSocket) {
     this.wsClients.add(ws);
     ws.on('close', () => {

@@ -324,6 +324,49 @@ app.post('/api/cost/limits', (req: Request, res: Response) => {
   res.json({ success: true, limits, summary: costMonitor.getSummary() });
 });
 
+// System Reset: Purge all old datasets, jobs, uploaded images, and generated PLY models
+app.post('/api/system/reset', (_req: Request, res: Response) => {
+  try {
+    datasetStore.clear();
+    jobQueue.clearAllJobs();
+
+    // Clear uploaded models (except dataset_plys templates)
+    const modelsDir = path.join(process.cwd(), 'uploads', 'models');
+    if (fs.existsSync(modelsDir)) {
+      const files = fs.readdirSync(modelsDir);
+      files.forEach((file) => {
+        if (file !== 'dataset_plys') {
+          const filePath = path.join(modelsDir, file);
+          try {
+            if (fs.statSync(filePath).isFile()) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (e) {}
+        }
+      });
+    }
+
+    // Clear temporary uploaded photos
+    if (fs.existsSync(uploadDir)) {
+      const uploadFiles = fs.readdirSync(uploadDir);
+      uploadFiles.forEach((file) => {
+        if (file !== 'models') {
+          try {
+            const filePath = path.join(uploadDir, file);
+            if (fs.statSync(filePath).isFile()) {
+              fs.unlinkSync(filePath);
+            }
+          } catch (e) {}
+        }
+      });
+    }
+
+    res.json({ success: true, message: 'All old data, projects, jobs, and generated PLY files deleted successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'System reset failed' });
+  }
+});
+
 // Stage 2: Pipeline Job REST Endpoints
 
 // Create new 3D Gaussian Splatting job

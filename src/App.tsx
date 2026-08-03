@@ -22,7 +22,7 @@ import {
   calculateDatasetHealth,
 } from './utils/qualityAnalyzer';
 import { loadBoxSampleDataset } from './utils/sampleDataset';
-import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight, Terminal } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight, Terminal, RotateCcw } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
@@ -40,6 +40,27 @@ export const App: React.FC = () => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // System Reset Handler
+  const handleResetAllData = async () => {
+    if (!window.confirm('Delete all old data, saved projects, jobs, uploaded images, and generated PLY models?')) return;
+    try {
+      await fetch('/api/system/reset', { method: 'POST' });
+      localStorage.clear();
+      setPhotos([]);
+      setJobs([]);
+      setProjects([]);
+      setSelectedProjectId(null);
+      setSelectedModelUrl('');
+      setActiveStage('stage1');
+      setNotification({
+        type: 'success',
+        message: 'Purged all old projects, jobs, uploaded files, and PLY models. System refreshed!',
+      });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: `Reset failed: ${err.message}` });
+    }
+  };
 
   // Projects list state (Stage 1 creates projects, Stage 2 selects projects)
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
@@ -373,17 +394,28 @@ export const App: React.FC = () => {
             </button>
           </div>
 
-          <button
-            className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md"
-            title="Google Account Authentication & System Settings"
-          >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-rose-500 to-amber-500 p-0.5 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
-                <User className="w-3 h-3 text-slate-200" />
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleResetAllData}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95"
+              title="Delete all old data, saved projects, jobs, uploaded images, and generated PLY models"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Reset All Data</span>
+            </button>
+
+            <button
+              className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md"
+              title="Google Account Authentication & System Settings"
+            >
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-rose-500 to-amber-500 p-0.5 flex items-center justify-center">
+                <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
+                  <User className="w-3 h-3 text-slate-200" />
+                </div>
               </div>
-            </div>
-            <span>Sign In / Settings</span>
-          </button>
+              <span>Sign In / Settings</span>
+            </button>
+          </div>
         </div>
       </header>
 
