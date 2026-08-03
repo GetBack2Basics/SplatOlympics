@@ -394,9 +394,19 @@ app.delete('/api/project/:id', (req: Request, res: Response) => {
 
 // Create new 3D Gaussian Splatting job
 app.post('/api/pipeline/job/create', (req: Request, res: Response) => {
-  const { datasetId, datasetName, photoCount, qualityPreset } = req.body;
-  const job = jobQueue.createJob(datasetId || 'ds_demo', datasetName || '3D Capture Session', Number(photoCount) || 15, qualityPreset || 'standard');
-  res.json({ success: true, job });
+  try {
+    const { datasetId, datasetName, photoCount, qualityPreset } = req.body || {};
+    const job = jobQueue.createJob(
+      datasetId || `ds_${Date.now()}`,
+      datasetName || '3D Capture Session',
+      Number(photoCount) || 12,
+      qualityPreset || 'standard'
+    );
+    res.json({ success: true, job });
+  } catch (err: any) {
+    console.error('[API] Job creation error:', err);
+    res.status(500).json({ error: err.message || 'Failed to create job' });
+  }
 });
 
 // List all jobs

@@ -301,7 +301,13 @@ export const App: React.FC = () => {
   // Stage 2: Create 3D Model File at Chosen Quality
   const handleGenerateModelInStage2 = async () => {
     const activeProj = projects.find((p) => p.id === selectedProjectId) || projects[0];
-    if (!activeProj) return;
+    if (!activeProj) {
+      setNotification({
+        type: 'error',
+        message: 'No active project found. Load photos and click "Save Project & Go to Stage 2" in Stage 1 first!',
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -316,7 +322,18 @@ export const App: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Server returned invalid response (${res.status}): ${responseText.slice(0, 100)}`);
+      }
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `Server error (${res.status})`);
+      }
+
       if (data.job) {
         setJobs((prev) => [data.job, ...prev.filter((j) => j.id !== data.job.id)]);
         setActiveJobId(data.job.id);
