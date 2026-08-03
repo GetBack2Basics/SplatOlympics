@@ -308,23 +308,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleLoadSteamStudioSample = async () => {
-    setIsAnalyzing(true);
-    try {
-      const samplePhotos = await loadBoxSampleDataset();
-      setPhotos(samplePhotos);
-      setActiveStage('stage1');
-      setNotification({
-        type: 'success',
-        message: 'Loaded Box "サボテンGS" raw images into Stage 1! Click "Save Project & Go to Stage 2" to continue.',
-      });
-    } catch (err: any) {
-      setNotification({ type: 'error', message: `Sample dataset loading failed: ${err.message}` });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   const handleCancelJob = (jobId: string) => {
     socketService.cancelJob(jobId);
   };
@@ -488,83 +471,25 @@ export const App: React.FC = () => {
             {/* GCP Credit & Cost Monitor */}
             <GcpCostMonitor />
 
-            {/* Top Grid: Active Job Monitor & Live Console Log */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <PipelineJobMonitor
-                job={activeJob}
-                onCancelJob={handleCancelJob}
-                onInspectModel={(jobToInspect) => {
-                  if (jobToInspect.plyFileUrl) {
-                    setSelectedModelUrl(jobToInspect.plyFileUrl);
-                  }
-                  setActiveStage('stage3');
-                }}
-              />
-              <LiveConsoleLog logs={activeJob ? activeJob.logs : []} />
-            </div>
+            {/* Active Job Monitor */}
+            <PipelineJobMonitor
+              job={activeJob}
+              onCancelJob={handleCancelJob}
+              onInspectModel={(jobToInspect) => {
+                if (jobToInspect.plyFileUrl) {
+                  setSelectedModelUrl(jobToInspect.plyFileUrl);
+                }
+                setActiveStage('stage3');
+              }}
+            />
 
-            {/* Bottom Grid: Reconstruction Job Queue & History List */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <JobHistoryList
-                  jobs={jobs}
-                  activeJobId={activeJob ? activeJob.id : null}
-                  onSelectJob={(id) => setActiveJobId(id)}
-                  onStartNewJob={() => setActiveStage('stage1')}
-                />
-              </div>
-
-              {/* Box Sample Reference Card */}
-              <div className="bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center space-x-2 pb-3 mb-3 border-b border-slate-800">
-                    <Sparkles className="w-5 h-5 text-amber-400" />
-                    <h3 className="text-sm font-bold text-slate-200 uppercase">3DGS Test Dataset (Box)</h3>
-                  </div>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                    Sample 3D Gaussian Splatting dataset hosted on Box provided by Steam Studio / 3D Scan Studio Iris:
-                  </p>
-
-                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs space-y-2 mb-4">
-                    <div className="flex justify-between font-mono text-slate-300">
-                      <span>Dataset:</span>
-                      <span className="font-bold text-splat-neonCyan">サボテンGS</span>
-                    </div>
-                    <div className="flex justify-between font-mono text-slate-300">
-                      <span>Camera:</span>
-                      <span>NIKON Z7II 8K</span>
-                    </div>
-                    <div className="flex justify-between font-mono text-slate-300">
-                      <span>Size:</span>
-                      <span>1.45 GB (.ZIP)</span>
-                    </div>
-                    <div className="flex justify-between font-mono text-slate-300">
-                      <span>License:</span>
-                      <span className="text-emerald-400 font-bold">CC0 Public Domain</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    onClick={handleLoadSteamStudioSample}
-                    className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-lg shadow-amber-400/20"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Load Box Sample Dataset</span>
-                  </button>
-
-                  <a
-                    href="https://app.box.com/s/itozvq23jh4av2a5hg08d7qevdbi93ii"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-all"
-                  >
-                    <span>Open Box Shared Link</span>
-                  </a>
-                </div>
-              </div>
-            </div>
+            {/* Reconstruction Job Queue & History List */}
+            <JobHistoryList
+              jobs={jobs}
+              activeJobId={activeJob ? activeJob.id : null}
+              onSelectJob={(id) => setActiveJobId(id)}
+              onStartNewJob={() => setActiveStage('stage1')}
+            />
           </div>
         )}
 
