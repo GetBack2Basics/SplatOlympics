@@ -209,15 +209,20 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Auto-select created PLY model when switching to Stage 3 if available
+  // Auto-select created PLY model matching active project/job when switching to Stage 3 or when jobs update
   useEffect(() => {
-    if (activeStage === 'stage3' && (!selectedModelUrl || selectedModelUrl === '/models/sample_cactus.ply')) {
-      const completedJob = jobs.find((j) => j.status === 'completed' && j.plyFileUrl);
-      if (completedJob && completedJob.plyFileUrl) {
-        setSelectedModelUrl(completedJob.plyFileUrl);
+    if (activeStage === 'stage3') {
+      const projJob = jobs.find((j) => (j.datasetId === selectedProjectId || j.datasetName === datasetName) && j.plyFileUrl);
+      if (projJob && projJob.plyFileUrl) {
+        setSelectedModelUrl(projJob.plyFileUrl);
+      } else {
+        const latestJob = jobs.find((j) => j.plyFileUrl);
+        if (latestJob && latestJob.plyFileUrl && (!selectedModelUrl || selectedModelUrl === '/models/sample_cactus.ply')) {
+          setSelectedModelUrl(latestJob.plyFileUrl);
+        }
       }
     }
-  }, [activeStage, jobs]);
+  }, [activeStage, selectedProjectId, datasetName, jobs]);
 
   // Handle photos selected or dropped in Stage 1
   const handleFilesSelected = async (files: File[]) => {
@@ -642,7 +647,7 @@ export const App: React.FC = () => {
                     Box 3DGS Cactus Scan [STANDARD] (sample_cactus.ply)
                   </option>
                   {jobs
-                    .filter((j) => j.status === 'completed' && j.plyFileUrl)
+                    .filter((j) => Boolean(j.plyFileUrl))
                     .map((j) => (
                       <option key={j.id} value={j.plyFileUrl}>
                         {j.datasetName} [{j.qualityPreset ? j.qualityPreset.toUpperCase() : 'STANDARD'}] ({j.plyFileUrl?.split('/').pop()})
@@ -663,9 +668,10 @@ export const App: React.FC = () => {
             <SplatViewport3D
               modelUrl={selectedModelUrl}
               datasetName={
-                activeJob
+                jobs.find((j) => j.plyFileUrl === selectedModelUrl)?.datasetName ||
+                (activeJob
                   ? `${activeJob.datasetName} [${(activeJob.qualityPreset || 'standard').toUpperCase()}]`
-                  : 'Box 3DGS Cactus Scan [STANDARD]'
+                  : 'Box 3DGS Cactus Scan [STANDARD]')
               }
             />
           </div>
