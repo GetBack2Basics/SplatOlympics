@@ -131,6 +131,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('splat_active_stage', activeStage);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeStage]);
 
   useEffect(() => {
@@ -428,7 +429,7 @@ export const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-base font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-                SplatOlympics <span className="text-[10px] sm:text-xs px-2 py-0.5 bg-splat-neonCyan/10 border border-splat-neonCyan/30 text-splat-neonCyan rounded-full font-mono">Arena v2.0</span>
+                SplatOlympics <span className="text-[10px] sm:text-xs px-2 py-0.5 bg-splat-neonCyan/10 border border-splat-neonCyan/30 text-splat-neonCyan rounded-full font-mono">Arena</span>
               </h1>
               <p className="text-[10px] text-slate-400">Gaussian Splatting 3D Reconstruction Platform</p>
             </div>
@@ -673,7 +674,18 @@ export const App: React.FC = () => {
 
       {/* Footer with Build Timestamp & Global Minimized Log Console Button */}
       <footer className="mt-12 border-t border-slate-800 bg-slate-950/80 py-4 px-6 text-xs font-mono text-slate-500 max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-        <span>SplatOlympics Arena v2.0 • Gaussian Splatting Platform</span>
+        <span>
+          © ®{' '}
+          <a
+            href="https://github.com/GetBack2Basics"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-300 hover:text-splat-neonCyan transition-colors font-bold underline decoration-slate-600 hover:decoration-splat-neonCyan"
+          >
+            Get Back 2 Basics
+          </a>{' '}
+          - SplatOlympics for FunGIS
+        </span>
 
         <div className="flex items-center space-x-3">
           {/* View Log Button (Bottom Right, directly to the left of Build Date) */}
