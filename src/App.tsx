@@ -195,6 +195,10 @@ export const App: React.FC = () => {
         if (data.jobs && data.jobs.length > 0) {
           setJobs(data.jobs);
           if (!activeJobId) setActiveJobId(data.jobs[0].id);
+          const completedWithPly = data.jobs.find((j: any) => j.status === 'completed' && j.plyFileUrl);
+          if (completedWithPly) {
+            setSelectedModelUrl((current) => current || completedWithPly.plyFileUrl);
+          }
         }
       })
       .catch(() => {});
@@ -203,6 +207,16 @@ export const App: React.FC = () => {
       socketService.disconnect();
     };
   }, []);
+
+  // Auto-select created PLY model when switching to Stage 3 if available
+  useEffect(() => {
+    if (activeStage === 'stage3' && (!selectedModelUrl || selectedModelUrl === '/models/sample_cactus.ply')) {
+      const completedJob = jobs.find((j) => j.status === 'completed' && j.plyFileUrl);
+      if (completedJob && completedJob.plyFileUrl) {
+        setSelectedModelUrl(completedJob.plyFileUrl);
+      }
+    }
+  }, [activeStage, jobs]);
 
   // Handle photos selected or dropped in Stage 1
   const handleFilesSelected = async (files: File[]) => {
@@ -276,9 +290,40 @@ export const App: React.FC = () => {
 
     try {
       const projId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const name = datasetName || '3D Reconstruction Target';
+
+      // Upload actual Stage 1 photo files to backend if user provided custom file objects
+      const uploadableFiles = photos.filter((p) => p.file).map((p) => p.file as File);
+      if (uploadableFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('datasetId', projId);
+        formData.append('datasetName', name);
+
+        const metadata = photos.map((p) => ({
+          angleSector: p.angleSector,
+          sharpnessScore: p.sharpnessScore,
+          isBlurry: p.isBlurry,
+          hash: p.hash,
+          width: p.metadata?.width || 1920,
+          height: p.metadata?.height || 1080,
+          cameraModel: p.metadata?.cameraModel || 'Mobile Camera',
+          focalLength: p.metadata?.focalLength || 26,
+        }));
+        formData.append('metadata', JSON.stringify(metadata));
+
+        uploadableFiles.forEach((file) => {
+          formData.append('files', file);
+        });
+
+        await fetch('/api/dataset/upload', {
+          method: 'POST',
+          body: formData,
+        }).catch(() => {});
+      }
+
       const newProj: ProjectItem = {
         id: projId,
-        name: datasetName || '3D Reconstruction Target',
+        name,
         photoCount: photos.length,
         createdAt: Date.now(),
       };
@@ -373,46 +418,48 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-splat-bg text-slate-100 font-sans selection:bg-splat-neonCyan selection:text-black">
       {/* Header Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-splat-bg/80 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-splat-bg/90 backdrop-blur-md border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-splat-neonCyan via-splat-neonPurple to-splat-neonGreen flex items-center justify-center p-0.5 shadow-lg shadow-splat-neonCyan/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-splat-neonCyan via-splat-neonPurple to-splat-neonGreen flex items-center justify-center p-0.5 shadow-lg shadow-splat-neonCyan/20 shrink-0">
               <div className="w-full h-full bg-splat-bg rounded-[10px] flex items-center justify-center">
                 <Layers className="w-5 h-5 text-splat-neonCyan" />
               </div>
             </div>
             <div>
               <h1 className="text-base font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-                SplatOlympics <span className="text-xs px-2 py-0.5 bg-splat-neonCyan/10 border border-splat-neonCyan/30 text-splat-neonCyan rounded-full font-mono">Arena v2.0</span>
+                SplatOlympics <span className="text-[10px] sm:text-xs px-2 py-0.5 bg-splat-neonCyan/10 border border-splat-neonCyan/30 text-splat-neonCyan rounded-full font-mono">Arena v2.0</span>
               </h1>
               <p className="text-[10px] text-slate-400">Gaussian Splatting 3D Reconstruction Platform</p>
             </div>
           </div>
 
           {/* Navigation Stage Tabs */}
-          <div className="flex items-center space-x-2 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center space-x-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full no-scrollbar">
             <button
               onClick={() => setActiveStage('stage1')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
                 activeStage === 'stage1'
                   ? 'bg-splat-neonCyan text-black shadow-md shadow-splat-neonCyan/20'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Camera className="w-4 h-4" />
-              <span>Stage 1: Load Photos & Save Project</span>
+              <Camera className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline">Stage 1: Load Photos & Save Project</span>
+              <span className="md:hidden">Stage 1</span>
             </button>
 
             <button
               onClick={() => setActiveStage('stage2')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
                 activeStage === 'stage2'
                   ? 'bg-splat-neonPurple text-white shadow-md shadow-splat-neonPurple/20'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Cpu className="w-4 h-4" />
-              <span>Stage 2: Select Project & Create PLY/SPLAT</span>
+              <Cpu className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline">Stage 2: Select Project & Create PLY/SPLAT</span>
+              <span className="md:hidden">Stage 2</span>
               {jobs.filter((j) => j.status === 'processing').length > 0 && (
                 <span className="w-2 h-2 rounded-full bg-splat-neonGreen animate-ping" />
               )}
@@ -420,18 +467,19 @@ export const App: React.FC = () => {
 
             <button
               onClick={() => setActiveStage('stage3')}
-              className={`flex items-center space-x-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${
                 activeStage === 'stage3'
                   ? 'bg-splat-neonGreen text-black shadow-md shadow-splat-neonGreen/20'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Eye className="w-4 h-4" />
-              <span>Stage 3: View 3D PLY Model</span>
+              <Eye className="w-4 h-4 shrink-0" />
+              <span className="hidden md:inline">Stage 3: View 3D PLY Model</span>
+              <span className="md:hidden">Stage 3</span>
             </button>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             <button
               onClick={handleResetAllData}
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95"

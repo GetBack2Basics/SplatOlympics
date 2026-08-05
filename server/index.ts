@@ -396,11 +396,14 @@ app.delete('/api/project/:id', (req: Request, res: Response) => {
 app.post('/api/pipeline/job/create', (req: Request, res: Response) => {
   try {
     const { datasetId, datasetName, photoCount, qualityPreset } = req.body || {};
+    const dataset = datasetStore.get(datasetId);
+    const photos = dataset ? dataset.photos : [];
     const job = jobQueue.createJob(
       datasetId || `ds_${Date.now()}`,
-      datasetName || '3D Capture Session',
-      Number(photoCount) || 12,
-      qualityPreset || 'standard'
+      datasetName || (dataset ? dataset.name : '3D Capture Session'),
+      Number(photoCount) || (photos.length > 0 ? photos.length : 15),
+      qualityPreset || 'standard',
+      photos
     );
     res.json({ success: true, job });
   } catch (err: any) {
@@ -453,7 +456,15 @@ wss.on('connection', (ws: WebSocket) => {
     try {
       const data = JSON.parse(msg.toString());
       if (data.type === 'START_JOB') {
-        jobQueue.createJob(data.datasetId, data.datasetName, data.photoCount);
+        const dataset = datasetStore.get(data.datasetId);
+        const photos = dataset ? dataset.photos : [];
+        jobQueue.createJob(
+          data.datasetId,
+          data.datasetName || (dataset ? dataset.name : '3D Capture Session'),
+          data.photoCount || (photos.length > 0 ? photos.length : 15),
+          data.qualityPreset || 'standard',
+          photos
+        );
       } else if (data.type === 'CANCEL_JOB') {
         jobQueue.cancelJob(data.jobId);
       }

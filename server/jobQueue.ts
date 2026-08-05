@@ -30,6 +30,7 @@ export interface PipelineJob {
   datasetName: string;
   photoCount: number;
   qualityPreset?: QualityPreset;
+  photos?: any[];
   status: 'queued' | 'processing' | 'paused' | 'completed' | 'failed';
   currentStage: JobStage;
   progressPercent: number;
@@ -111,7 +112,7 @@ export class SplatJobQueueManager {
     });
   }
 
-  public createJob(datasetId: string, datasetName: string, photoCount: number, qualityPreset: QualityPreset = 'standard'): PipelineJob {
+  public createJob(datasetId: string, datasetName: string, photoCount: number, qualityPreset: QualityPreset = 'standard', photos?: any[]): PipelineJob {
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const job: PipelineJob = {
       id: jobId,
@@ -119,6 +120,7 @@ export class SplatJobQueueManager {
       datasetName: datasetName || '3D Reconstruction Target',
       photoCount: photoCount || 15,
       qualityPreset,
+      photos: photos || [],
       status: 'queued',
       currentStage: 'QUEUED',
       progressPercent: 0,
@@ -182,6 +184,7 @@ export class SplatJobQueueManager {
         job.photoCount,
         job.datasetName,
         job.qualityPreset || 'standard',
+        job.photos || [],
         (stage, progressPercent, message, telemetry) => {
           job.currentStage = stage;
           job.progressPercent = progressPercent;

@@ -12,6 +12,9 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+# Install Python & OpenCV dependencies for Structure-from-Motion (SfM) processing
+RUN apk add --no-cache python3 py3-numpy py3-opencv
+
 ENV NODE_ENV=production
 ENV PORT=3000
 

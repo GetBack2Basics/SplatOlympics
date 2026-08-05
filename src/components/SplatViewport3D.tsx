@@ -148,34 +148,47 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     const rawPos = parsedData.positions;
     const rawCol = parsedData.colors;
 
+    let validVertexCount = 0;
     let sumX = 0, sumY = 0, sumZ = 0;
     for (let i = 0; i < vertexCount; i++) {
-      sumX += rawPos[i * 3];
-      sumY += rawPos[i * 3 + 1];
-      sumZ += rawPos[i * 3 + 2];
+      const x = rawPos[i * 3];
+      const y = rawPos[i * 3 + 1];
+      const z = rawPos[i * 3 + 2];
+      if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+        sumX += x;
+        sumY += y;
+        sumZ += z;
+        validVertexCount++;
+      }
     }
 
-    const centerX = sumX / vertexCount;
-    const centerY = sumY / vertexCount;
-    const centerZ = sumZ / vertexCount;
+    const centerX = validVertexCount > 0 ? sumX / validVertexCount : 0;
+    const centerY = validVertexCount > 0 ? sumY / validVertexCount : 0;
+    const centerZ = validVertexCount > 0 ? sumZ / validVertexCount : 0;
 
     const centeredPositions = new Float32Array(vertexCount * 3);
     let maxDistSq = 0;
 
     for (let i = 0; i < vertexCount; i++) {
-      const cx = rawPos[i * 3] - centerX;
-      const cy = rawPos[i * 3 + 1] - centerY;
-      const cz = rawPos[i * 3 + 2] - centerZ;
+      let cx = (rawPos[i * 3] || 0) - centerX;
+      let cy = (rawPos[i * 3 + 1] || 0) - centerY;
+      let cz = (rawPos[i * 3 + 2] || 0) - centerZ;
+
+      if (isNaN(cx) || isNaN(cy) || isNaN(cz)) {
+        cx = 0;
+        cy = 0;
+        cz = 0;
+      }
 
       centeredPositions[i * 3] = cx;
       centeredPositions[i * 3 + 1] = cy;
       centeredPositions[i * 3 + 2] = cz;
 
       const distSq = cx * cx + cy * cy + cz * cz;
-      if (distSq > maxDistSq) maxDistSq = distSq;
+      if (distSq > maxDistSq && !isNaN(distSq)) maxDistSq = distSq;
     }
 
-    const modelRadius = Math.sqrt(maxDistSq) || 1.5;
+    const modelRadius = Math.sqrt(maxDistSq) > 0 && !isNaN(maxDistSq) ? Math.sqrt(maxDistSq) : 1.5;
 
     // Validate & Sanitize Color Buffer
     let totalColorSum = 0;
@@ -452,15 +465,19 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
     <div
       ref={containerRef}
       className={`relative w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all ${
-        isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : 'min-h-[520px]'
+        isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : 'min-h-[480px] sm:min-h-[520px]'
       }`}
     >
-      {/* Three.js Canvas */}
-      <canvas ref={canvasRef} className="w-full h-full block cursor-grab active:cursor-grabbing" />
+      {/* Three.js Canvas with Touch Action Prevention for Mobile Dragging */}
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full block cursor-grab active:cursor-grabbing touch-none"
+        style={{ touchAction: 'none' }}
+      />
 
       {/* Loading Overlay */}
       {isLoading && (
-        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 z-20">
           <RefreshCw className="w-10 h-10 text-splat-neonCyan animate-spin mb-3" />
           <h3 className="text-sm font-bold text-slate-200">Parsing 3D Gaussian PLY Buffer...</h3>
           <p className="text-xs text-slate-400 mt-1">Applying cakewalk/splat Depth Sorting & Radial Gaussian Shaders</p>
@@ -469,7 +486,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
 
       {/* Error Alert Overlay */}
       {errorMessage && (
-        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 z-20">
           <AlertCircle className="w-10 h-10 text-rose-400 mb-3" />
           <h3 className="text-sm font-bold text-slate-200">{errorMessage}</h3>
           <p className="text-xs text-slate-400 mt-1">Submit a dataset in Stage 1 to generate a new 3D model asset.</p>
@@ -477,10 +494,10 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       )}
 
       {/* Top HUD Bar */}
-      <div className="absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
         {/* Left Badge: Model Title & FPS */}
-        <div className="flex items-center space-x-2.5 bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-3.5 py-2 rounded-xl pointer-events-auto shadow-lg">
-          <div className="w-2.5 h-2.5 rounded-full bg-splat-neonGreen animate-pulse" />
+        <div className="flex items-center space-x-2.5 bg-slate-900/90 backdrop-blur-xl border border-slate-800 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl pointer-events-auto shadow-lg">
+          <div className="w-2.5 h-2.5 rounded-full bg-splat-neonGreen animate-pulse shrink-0" />
           <div>
             <div className="flex items-center space-x-2">
               <JobLocationBadge
@@ -495,7 +512,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         </div>
 
         {/* Right Action Buttons */}
-        <div className="flex items-center space-x-2 pointer-events-auto">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 pointer-events-auto flex-wrap">
           {/* Hidden File Input for Custom Local PLY Files */}
           <input
             type="file"
@@ -508,18 +525,18 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
           {/* Load Local PLY Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 bg-splat-neonCyan/10 hover:bg-splat-neonCyan/20 border border-splat-neonCyan/40 text-splat-neonCyan rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 shadow-lg"
-            title="Load custom .PLY model file directly from disk (e.g. 2M Splat PLY)"
+            className="px-2.5 py-1.5 bg-splat-neonCyan/10 hover:bg-splat-neonCyan/20 border border-splat-neonCyan/40 text-splat-neonCyan rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 shadow-lg"
+            title="Load custom .PLY model file directly from disk"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Load .PLY File</span>
+            <span className="hidden sm:inline">Load .PLY</span>
           </button>
 
           {/* Render Mode Switcher */}
           <div className="flex items-center space-x-1 bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-1 rounded-xl shadow-lg">
             <button
               onClick={() => setRenderMode('SPLATS')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
                 renderMode === 'SPLATS'
                   ? 'bg-splat-neonCyan text-black shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -529,7 +546,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
             </button>
             <button
               onClick={() => setRenderMode('POINT_CLOUD')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
                 renderMode === 'POINT_CLOUD'
                   ? 'bg-splat-neonPurple text-white shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -539,7 +556,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
             </button>
             <button
               onClick={() => setRenderMode('HYBRID')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
                 renderMode === 'HYBRID'
                   ? 'bg-splat-neonGreen text-black shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
@@ -583,10 +600,10 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       </div>
 
       {/* Bottom Floating Sliders HUD */}
-      <div className="absolute bottom-4 left-4 right-4 bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-3 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4 text-xs">
+      <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-2.5 sm:p-3 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-2.5 sm:gap-4 text-xs z-10">
         {/* Particle Scale Slider */}
-        <div className="flex items-center space-x-3 min-w-[200px]">
-          <span className="font-mono text-[11px] text-slate-400 font-bold uppercase shrink-0">Scale: {particleScale}x</span>
+        <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-[140px] sm:min-w-[180px]">
+          <span className="font-mono text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase shrink-0">Scale: {particleScale}x</span>
           <input
             type="range"
             min="0.5"
@@ -599,8 +616,8 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         </div>
 
         {/* Density Subsampling Slider */}
-        <div className="flex items-center space-x-3 min-w-[200px]">
-          <span className="font-mono text-[11px] text-slate-400 font-bold uppercase shrink-0">Density: {densityPercent}%</span>
+        <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-[140px] sm:min-w-[180px]">
+          <span className="font-mono text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase shrink-0">Density: {densityPercent}%</span>
           <input
             type="range"
             min="10"
@@ -613,14 +630,14 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
         </div>
 
         {/* Info Legend */}
-        <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400 shrink-0">
+        <div className="hidden md:flex items-center space-x-3 text-[11px] font-mono text-slate-400 shrink-0">
           <span className="flex items-center space-x-1">
             <span className="w-2 h-2 rounded-full bg-splat-neonCyan animate-pulse" />
             <span>cakewalk/splat Shader</span>
           </span>
           <span className="flex items-center space-x-1">
             <span className="w-2 h-2 rounded-full bg-splat-neonPurple" />
-            <span>Depth Sorted (Back-to-Front)</span>
+            <span>Depth Sorted</span>
           </span>
         </div>
       </div>
