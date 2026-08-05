@@ -288,7 +288,7 @@ app.post('/api/gemini/evaluate', async (req: Request, res: Response) => {
     const { datasetId } = req.body;
     res.json({
       success: true,
-      analysis: 'Gemini AI Vision evaluated photo set: Subject lighting is uniform, features are sharp for COLMAP feature extraction.',
+      analysis: 'Feature analysis evaluated photo set: Subject lighting is uniform, features are sharp for COLMAP feature extraction.',
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Gemini evaluation failed' });

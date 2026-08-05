@@ -4,7 +4,7 @@ import path from 'path';
 export interface ResourceCostItem {
   timestamp: number;
   jobId?: string;
-  resourceType: 'CLOUD_RUN_CPU' | 'CLOUD_RUN_MEM' | 'GEMINI_AI' | 'GPU_COMPUTE' | 'STORAGE';
+  resourceType: 'CLOUD_RUN_CPU' | 'CLOUD_RUN_MEM' | 'ANALYSIS_API' | 'GPU_COMPUTE' | 'STORAGE';
   description: string;
   costUsd: number;
 }

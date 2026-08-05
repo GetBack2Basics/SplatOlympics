@@ -249,7 +249,7 @@ export const GcpCostMonitor: React.FC = () => {
                   const badgeColor =
                     item.resourceType === 'GPU_COMPUTE'
                       ? 'text-splat-neonPurple bg-purple-950/60 border-purple-800/60'
-                      : item.resourceType === 'GEMINI_AI'
+                      : item.resourceType === 'ANALYSIS_API'
                       ? 'text-splat-neonCyan bg-cyan-950/60 border-cyan-800/60'
                       : 'text-emerald-400 bg-emerald-950/60 border-emerald-800/60';
 
