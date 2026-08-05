@@ -178,6 +178,23 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
+
+              {/* NYT R&D Three Donuts Pattern Prompt */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 p-2 bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-xl flex items-center justify-between text-[11px] text-slate-300">
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-0.5 bg-splat-neonCyan/20 text-splat-neonCyan font-mono font-bold rounded border border-splat-neonCyan/40">
+                    NYT Pattern Guide
+                  </span>
+                  <span>
+                    {selectedSector === 'Overhead'
+                      ? 'Ring 1: Upper Donut (Tilted 45° Down)'
+                      : selectedSector === 'North' || selectedSector === 'South'
+                      ? 'Ring 2: Mid Donut (Chest Height)'
+                      : 'Ring 3: Base Donut (Base Level Tilted Up)'}
+                  </span>
+                </div>
+                <span className="font-mono text-emerald-400 font-bold hidden sm:inline">≥ 1/3 Overlap Required</span>
+              </div>
             </>
           )}
         </div>

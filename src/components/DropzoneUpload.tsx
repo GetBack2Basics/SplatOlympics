@@ -170,14 +170,18 @@ export const DropzoneUpload: React.FC<DropzoneUploadProps> = ({
       </div>
 
       {/* Guidelines Footer */}
-      <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-medium">
+      <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-medium">
         <div className="flex items-center space-x-1.5 text-emerald-400">
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>Automatic Blur & EXIF Validation</span>
+          <span>Automatic Blur & EXIF Sanity Check</span>
+        </div>
+        <div className="flex items-center space-x-1 text-splat-neonCyan font-mono">
+          <Sparkles className="w-3.5 h-3.5 text-splat-neonCyan" />
+          <span>NYT Sweet Spot: ≤20MP / 6K (Prevents GPU Overdraw)</span>
         </div>
         <div className="flex items-center space-x-1 text-amber-400">
           <AlertTriangle className="w-3.5 h-3.5" />
-          <span>Min 70% Overlap Recommended</span>
+          <span>Min 1/3 (33%) Overlap & Fast Shutter Speed</span>
         </div>
       </div>
     </div>

@@ -112,8 +112,24 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
         {/* Actionable Recommendations List */}
         <div className="space-y-2 mb-4">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-            Quality Optimization Cues
+            Quality Optimization Cues & Decision Card
           </span>
+
+          {/* NYT 3DGS vs Photogrammetry Recommendation Badge */}
+          <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-splat-neonCyan flex items-center space-x-1">
+                <Sparkles className="w-3 h-3 text-splat-neonCyan" />
+                <span>Recommended 3D Tech</span>
+              </span>
+              <span className="text-[10px] font-mono font-bold bg-splat-neonCyan/20 text-splat-neonCyan border border-splat-neonCyan/40 px-2 py-0.5 rounded">
+                3D Gaussian Splatting
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-300">
+              Optimal for <strong className="text-white">glass, reflections, translucency, vegetation & humans</strong>. Splats recreate fine lighting and transparent objects where solid photogrammetry meshes fail.
+            </p>
+          </div>
 
           {summary.recommendations.length === 0 ? (
             <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-2 text-xs text-emerald-400 font-semibold">

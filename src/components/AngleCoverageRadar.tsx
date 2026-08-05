@@ -39,11 +39,20 @@ export const AngleCoverageRadar: React.FC<AngleCoverageRadarProps> = ({ coverage
 
       {/* Radar Graphic Container */}
       <div className="relative w-full h-52 my-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 flex items-center justify-center overflow-hidden">
-        {/* Concentric Radar Rings */}
+        {/* Concentric Radar Rings & Three Donuts Elevation Guides */}
         <div className="absolute w-44 h-44 rounded-full border border-slate-800/60 animate-ping opacity-25" />
-        <div className="absolute w-36 h-36 rounded-full border border-slate-800/80" />
-        <div className="absolute w-24 h-24 rounded-full border border-slate-800" />
-        <div className="absolute w-12 h-12 rounded-full border border-slate-800" />
+        {/* Upper Donut Ring */}
+        <div className="absolute w-40 h-40 rounded-full border border-dashed border-splat-neonCyan/40 flex items-start justify-center pt-1">
+          <span className="text-[9px] font-mono text-splat-neonCyan/70 font-bold bg-slate-950 px-1 rounded">Upper Donut</span>
+        </div>
+        {/* Mid Donut Ring */}
+        <div className="absolute w-28 h-28 rounded-full border border-slate-700/80 flex items-start justify-center pt-0.5">
+          <span className="text-[9px] font-mono text-slate-400 font-bold bg-slate-950 px-1 rounded">Mid Donut</span>
+        </div>
+        {/* Base Donut Ring */}
+        <div className="absolute w-16 h-16 rounded-full border border-dashed border-splat-neonPurple/50 flex items-start justify-center">
+          <span className="text-[8px] font-mono text-splat-neonPurple/80 font-bold bg-slate-950 px-0.5 rounded">Base Donut</span>
+        </div>
 
         {/* Crosshair Axes */}
         <div className="absolute inset-x-6 top-1/2 border-b border-slate-800/80" />
@@ -72,6 +81,20 @@ export const AngleCoverageRadar: React.FC<AngleCoverageRadarProps> = ({ coverage
             </div>
           );
         })}
+      </div>
+
+      {/* Frame Overlap & Pattern Indicator */}
+      <div className="mb-3 px-3 py-2 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+        <div className="flex items-center space-x-2">
+          <span className="w-2 h-2 rounded-full bg-splat-neonCyan animate-pulse" />
+          <span className="text-slate-300 font-medium">Est. Frame Overlap:</span>
+          <span className={`font-mono font-bold ${totalShots >= 12 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {totalShots >= 12 ? '≥ 45% (Optimal)' : totalShots >= 6 ? '33% (Min NYT Standard)' : '< 25% (Sparse)'}
+          </span>
+        </div>
+        <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+          3-Donuts Orbit
+        </span>
       </div>
 
       {/* Footer Sector Counts */}
