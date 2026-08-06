@@ -91,6 +91,31 @@ interface StoredDataset {
 }
 
 const datasetStore = new Map<string, StoredDataset>();
+const projectsDbPath = path.join(process.cwd(), 'uploads', 'projects_db.json');
+
+function loadProjectsFromDisk() {
+  try {
+    if (fs.existsSync(projectsDbPath)) {
+      const raw = fs.readFileSync(projectsDbPath, 'utf-8');
+      const list: StoredDataset[] = JSON.parse(raw);
+      list.forEach((d) => datasetStore.set(d.id, d));
+    }
+  } catch (err) {
+    console.warn('[Server] Could not load projects_db.json:', err);
+  }
+}
+
+function saveProjectsToDisk() {
+  try {
+    const list = Array.from(datasetStore.values());
+    fs.writeFileSync(projectsDbPath, JSON.stringify(list, null, 2));
+  } catch (err) {
+    console.error('[Server] Failed to save projects_db.json:', err);
+  }
+}
+
+// Load existing projects on startup
+loadProjectsFromDisk();
 
 // Helper to compute overall 3D Gaussian Splatting readiness
 function evaluateDatasetHealth(photos: StoredPhoto[]): {
@@ -235,6 +260,7 @@ app.post('/api/dataset/upload', upload.array('photos', 50), (req: Request, res: 
     existingDataset.recommendations = evaluation.recommendations;
 
     datasetStore.set(datasetId, existingDataset);
+    saveProjectsToDisk();
 
     res.json({
       success: true,
@@ -245,6 +271,56 @@ app.post('/api/dataset/upload', upload.array('photos', 50), (req: Request, res: 
     console.error('[API] Upload error:', err);
     res.status(500).json({ error: err.message || 'Failed to process photo upload' });
   }
+});
+
+// Get All Stored Projects across devices
+app.get('/api/projects', (_req: Request, res: Response) => {
+  const projects = Array.from(datasetStore.values()).map((d) => ({
+    id: d.id,
+    name: d.name,
+    photoCount: d.photos.length,
+    createdAt: d.createdAt,
+  })).sort((a, b) => b.createdAt - a.createdAt);
+
+  res.json({ projects });
+});
+
+// Create/Update Single Project metadata
+app.post('/api/project/create', (req: Request, res: Response) => {
+  const { datasetId, datasetName, photoCount } = req.body || {};
+  const id = (datasetId || `proj_${Date.now()}`).toString();
+  const name = (datasetName || '3D Reconstruction Target').toString();
+
+  let dataset = datasetStore.get(id);
+  if (!dataset) {
+    dataset = {
+      id,
+      name,
+      photos: [],
+      healthScore: 80,
+      isReadyForSplatting: true,
+      angleCoverage: { North: 3, South: 3, East: 3, West: 3, Overhead: 3 },
+      recommendations: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+  } else {
+    dataset.name = name;
+    dataset.updatedAt = Date.now();
+  }
+
+  datasetStore.set(id, dataset);
+  saveProjectsToDisk();
+
+  res.json({
+    success: true,
+    project: {
+      id: dataset.id,
+      name: dataset.name,
+      photoCount: dataset.photos.length || Number(photoCount) || 12,
+      createdAt: dataset.createdAt,
+    },
+  });
 });
 
 // Get Dataset Details
@@ -370,6 +446,7 @@ app.delete('/api/project/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     datasetStore.delete(id);
+    saveProjectsToDisk();
 
     // Delete associated models
     const modelsDir = path.join(process.cwd(), 'uploads', 'models');

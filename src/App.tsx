@@ -189,7 +189,19 @@ export const App: React.FC = () => {
       },
     });
 
-    // Fetch initial jobs from server
+    // Fetch initial jobs and projects from server for 100% cross-device (mobile/desktop) persistence
+    fetch('/api/projects')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.projects && data.projects.length > 0) {
+          setProjects(data.projects);
+          if (!selectedProjectId) {
+            setSelectedProjectId(data.projects[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+
     fetch('/api/pipeline/jobs')
       .then((res) => res.json())
       .then((data) => {
@@ -326,6 +338,16 @@ export const App: React.FC = () => {
           body: formData,
         }).catch(() => {});
       }
+
+      await fetch('/api/project/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: projId,
+          datasetName: name,
+          photoCount: photos.length,
+        }),
+      }).catch(() => {});
 
       const newProj: ProjectItem = {
         id: projId,
