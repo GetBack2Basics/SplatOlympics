@@ -1,5 +1,5 @@
-import React from 'react';
-import { FolderOpen, ArrowRight, Sparkles, Check, Trash2 } from 'lucide-react';
+import React, { useRef } from 'react';
+import { FolderOpen, ArrowRight, Sparkles, Check, Trash2, FolderPlus, AlertCircle } from 'lucide-react';
 import { QualityPreset } from '../types';
 import { JobLocationBadge } from './JobLocationBadge';
 
@@ -17,10 +17,12 @@ interface ProjectSelectorBarProps {
   selectedProjectId: string | null;
   onSelectProject: (id: string) => void;
   onDeleteProject?: (id: string) => void;
+  onLoadProjectFromDisk?: (projectData: any) => void;
   selectedQuality: QualityPreset;
   onSelectQuality: (quality: QualityPreset) => void;
   onGenerateModel: () => void;
   isGenerating?: boolean;
+  isGcpProcessingEnabled?: boolean;
 }
 
 export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
@@ -28,12 +30,35 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
   selectedProjectId,
   onSelectProject,
   onDeleteProject,
+  onLoadProjectFromDisk,
   selectedQuality,
   onSelectQuality,
   onGenerateModel,
   isGenerating = false,
+  isGcpProcessingEnabled = true,
 }) => {
+  const projectFileInputRef = useRef<HTMLInputElement | null>(null);
   const activeProject = projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (onLoadProjectFromDisk) {
+          onLoadProjectFromDisk(parsed);
+        }
+      } catch (err: any) {
+        alert(`Failed to parse project JSON file: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const QUALITY_OPTIONS: { id: QualityPreset; label: string; splats: string; desc: string }[] = [
     { id: 'draft', label: 'Draft', splats: '142K Splats', desc: '10k steps (Fast test)' },
@@ -58,8 +83,26 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
           </div>
         </div>
 
-        {/* Project Selector Dropdown & Delete Button */}
+        {/* Project Selector Dropdown, Load from Disk & Delete Buttons */}
         <div className="flex items-center space-x-2">
+          {/* Hidden Project JSON File Input */}
+          <input
+            type="file"
+            ref={projectFileInputRef}
+            onChange={handleFileChange}
+            accept=".json,.splatproj"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => projectFileInputRef.current?.click()}
+            className="px-3 py-2 bg-splat-neonCyan/10 hover:bg-splat-neonCyan/20 border border-splat-neonCyan/40 text-splat-neonCyan rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 shadow-md active:scale-95"
+            title="Load project JSON file directly from disk"
+          >
+            <FolderPlus className="w-4 h-4" />
+            <span>Load Project from Disk</span>
+          </button>
+
           <span className="text-xs font-bold text-slate-400 uppercase font-mono">Select Project:</span>
           <select
             value={activeProject ? activeProject.id : ''}
@@ -149,6 +192,19 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
         </div>
       </div>
 
+      {/* Maintenance / Demo Mode Banner when Admin turns off GCloud Cost Resources */}
+      {!isGcpProcessingEnabled && (
+        <div className="bg-amber-950/70 border border-amber-500/50 p-3.5 rounded-xl flex items-center space-x-3 text-xs text-amber-200 shadow-lg">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
+          <div>
+            <span className="font-bold block">Demo Mode Active (Cloud Processing Paused in Development)</span>
+            <span className="text-[11px] text-amber-300/80">
+              Live GCloud server GPU training is paused. Creating a 3D model will instantly simulate the 3DGS pipeline using authentic pre-rendered SuperSplat PLY models ({QUALITY_OPTIONS.find((q) => q.id === selectedQuality)?.splats}) for Stage 3 viewing!
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Action Button: Generate 3D PLY/SPLAT Model */}
       <button
         onClick={onGenerateModel}
@@ -162,6 +218,8 @@ export const ProjectSelectorBar: React.FC<ProjectSelectorBarProps> = ({
         <span>
           {isGenerating
             ? 'Processing 3D Gaussian Splatting Reconstruction...'
+            : !isGcpProcessingEnabled
+            ? `Create 3D PLY/SPLAT Model (Demo Mode: ${selectedQuality.toUpperCase()} - ${QUALITY_OPTIONS.find((q) => q.id === selectedQuality)?.splats})`
             : `Create 3D PLY/SPLAT Model (${activeProject ? activeProject.name : 'Project'} [${selectedQuality.toUpperCase()}])`}
         </span>
         <ArrowRight className="w-4 h-4" />

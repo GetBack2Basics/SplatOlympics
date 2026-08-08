@@ -26,6 +26,7 @@ import {
 interface SplatViewport3DProps {
   modelUrl?: string;
   datasetName?: string;
+  onCustomFileLoaded?: (file: File, fileUrl: string) => void;
 }
 
 /**
@@ -56,6 +57,7 @@ function createGaussianTexture(): THREE.CanvasTexture {
 export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   modelUrl = '/models/sample_cactus.ply',
   datasetName = '3D Reconstruction Model',
+  onCustomFileLoaded,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -71,6 +73,7 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const [particleScale, setParticleScale] = useState(1.8);
   const [fps, setFps] = useState(60);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   // NYT R&D & SuperSplat Feature States
   const [showSkybox, setShowSkybox] = useState(false);
@@ -88,14 +91,31 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   const pointsMeshRef = useRef<THREE.Points | null>(null);
   const frustumsGroupRef = useRef<THREE.Group | null>(null);
 
-  // Handle direct local .PLY file selection from user disk
-  const handleLocalFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processPlyFile = async (file: File) => {
     setIsLoading(true);
     setErrorMessage(null);
     setCustomFilename(file.name);
+
+    // 1. Upload to server to get permanent URL if available
+    let fileUrl = URL.createObjectURL(file);
+    try {
+      const formData = new FormData();
+      formData.append('plyFile', file);
+      const res = await fetch('/api/model/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.plyFileUrl) {
+          fileUrl = data.plyFileUrl;
+        }
+      }
+    } catch (_) {}
+
+    if (onCustomFileLoaded) {
+      onCustomFileLoaded(file, fileUrl);
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -116,6 +136,38 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
       setIsLoading(false);
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  // Handle direct local .PLY file selection from user disk
+  const handleLocalFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processPlyFile(file);
+  };
+
+  // Drag and Drop Event Handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.name.toLowerCase().endsWith('.ply') || file.name.toLowerCase().endsWith('.splat'))) {
+      processPlyFile(file);
+    } else if (file) {
+      alert('Please drop a valid 3D model file (.PLY or .SPLAT).');
+    }
   };
 
   // Fetch and parse real PLY binary model file
@@ -487,10 +539,22 @@ export const SplatViewport3D: React.FC<SplatViewport3DProps> = ({
   return (
     <div
       ref={containerRef}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       className={`relative w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl transition-all ${
         isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : 'min-h-[480px] sm:min-h-[520px]'
       }`}
     >
+      {/* Drag & Drop Overlay */}
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-30 bg-splat-neonCyan/20 backdrop-blur-md border-4 border-dashed border-splat-neonCyan flex flex-col items-center justify-center text-center p-6 animate-pulse">
+          <Upload className="w-16 h-16 text-splat-neonCyan mb-3 animate-bounce" />
+          <h3 className="text-lg font-extrabold text-white uppercase tracking-wider">Drop 3D Model File (.PLY / .SPLAT) Here</h3>
+          <p className="text-xs text-splat-neonCyan font-mono mt-1">Directly render 3D Gaussian Splatting point cloud in WebGL</p>
+        </div>
+      )}
+
       {/* Three.js Canvas with Touch Action Prevention for Mobile Dragging */}
       <canvas
         ref={canvasRef}

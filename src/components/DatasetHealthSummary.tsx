@@ -7,6 +7,7 @@ interface DatasetHealthSummaryProps {
   datasetName: string;
   onUpdateDatasetName: (name: string) => void;
   onSubmitPipeline: () => void;
+  onExportProjectJson?: () => void;
   isSubmitting?: boolean;
 }
 
@@ -15,6 +16,7 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
   datasetName,
   onUpdateDatasetName,
   onSubmitPipeline,
+  onExportProjectJson,
   isSubmitting,
 }) => {
   const isReady = summary.isReadyForSplatting;
@@ -150,19 +152,33 @@ export const DatasetHealthSummary: React.FC<DatasetHealthSummaryProps> = ({
         </div>
       </div>
 
-      {/* Stage 1 Action Button: Save Project & Go to Stage 2 */}
-      <button
-        onClick={onSubmitPipeline}
-        disabled={summary.totalPhotos === 0 || isSubmitting}
-        className={`w-full py-4 px-6 rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center space-x-2 shadow-2xl ${
-          summary.totalPhotos > 0
-            ? 'bg-gradient-to-r from-splat-neonCyan via-splat-neonPurple to-splat-neonGreen text-black shadow-splat-neonCyan/30 hover:brightness-110 ring-2 ring-splat-neonCyan/50 animate-pulse'
-            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-        }`}
-      >
-        <span>{isSubmitting ? 'Saving Project...' : 'Save Project & Go to Stage 2 →'}</span>
-        <ArrowRight className="w-4 h-4" />
-      </button>
+      {/* Stage 1 Action Buttons: Save Project & Export JSON */}
+      <div className="space-y-2">
+        <button
+          onClick={onSubmitPipeline}
+          disabled={summary.totalPhotos === 0 || isSubmitting}
+          className={`w-full py-4 px-6 rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center space-x-2 shadow-2xl ${
+            summary.totalPhotos > 0
+              ? 'bg-gradient-to-r from-splat-neonCyan via-splat-neonPurple to-splat-neonGreen text-black shadow-splat-neonCyan/30 hover:brightness-110 ring-2 ring-splat-neonCyan/50 animate-pulse'
+              : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+          }`}
+        >
+          <span>{isSubmitting ? 'Saving Project...' : 'Save Project & Go to Stage 2 →'}</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+
+        {onExportProjectJson && (
+          <button
+            onClick={onExportProjectJson}
+            disabled={summary.totalPhotos === 0}
+            className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold font-mono transition-all flex items-center justify-center space-x-2"
+            title="Download project JSON file to local disk"
+          >
+            <Sliders className="w-3.5 h-3.5 text-splat-neonCyan" />
+            <span>Download Project File (.json) to Disk</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 };

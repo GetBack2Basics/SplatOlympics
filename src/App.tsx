@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BentoGrid } from './components/BentoGrid';
 import { DropzoneUpload } from './components/DropzoneUpload';
 import { AngleCoverageRadar } from './components/AngleCoverageRadar';
@@ -22,7 +22,7 @@ import {
   calculateDatasetHealth,
 } from './utils/qualityAnalyzer';
 import { loadBoxSampleDataset } from './utils/sampleDataset';
-import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight, Terminal, RotateCcw } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Layers, Camera, Cpu, Download, Sparkles, Box, Eye, User, ArrowRight, Terminal, RotateCcw, Sliders, FolderPlus, Upload } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeStage, setActiveStage] = useState<'stage1' | 'stage2' | 'stage3'>(() => {
@@ -40,6 +40,23 @@ export const App: React.FC = () => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isLogDrawerOpen, setIsLogDrawerOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Admin GCloud Processing Switch State (Locked to false in Demo Mode to prevent GCloud costs)
+  const [isGcpProcessingEnabled, setIsGcpProcessingEnabled] = useState(false);
+
+  // Custom PLY Models Loaded from Disk
+  const [customModels, setCustomModels] = useState<{ id: string; name: string; url: string }[]>(() => {
+    const saved = localStorage.getItem('splat_custom_models');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  const stage3FileInputRef = useRef<HTMLInputElement | null>(null);
 
   // System Reset Handler
   const handleResetAllData = async () => {
@@ -141,10 +158,26 @@ export const App: React.FC = () => {
   }, [selectedModelUrl]);
 
   useEffect(() => {
-    if (activeJobId) {
-      localStorage.setItem('splat_active_job_id', activeJobId);
-    }
-  }, [activeJobId]);
+    localStorage.setItem('splat_custom_models', JSON.stringify(customModels));
+  }, [customModels]);
+
+  const handleToggleGcpProcessing = async () => {
+    const nextState = !isGcpProcessingEnabled;
+    setIsGcpProcessingEnabled(nextState);
+    try {
+      await fetch('/api/settings/gcp-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState }),
+      });
+      setNotification({
+        type: 'success',
+        message: nextState
+          ? 'Demo Admin Mode: GCloud 3D Reconstruction Service is now ACTIVE.'
+          : 'Demo Admin Mode: GCloud 3D Reconstruction Service is now PAUSED (Feature in development). Users can view & load custom PLY/SPLAT files in Stage 3.',
+      });
+    } catch (e) {}
+  };
 
   // Active Job selector
   const activeJob = useMemo(() => {
@@ -189,7 +222,16 @@ export const App: React.FC = () => {
       },
     });
 
-    // Fetch initial jobs and projects from server for 100% cross-device (mobile/desktop) persistence
+    // Fetch initial GCP status, jobs and projects from server for 100% cross-device (mobile/desktop) persistence
+    fetch('/api/settings/gcp-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.isGcpProcessingEnabled === 'boolean') {
+          setIsGcpProcessingEnabled(data.isGcpProcessingEnabled);
+        }
+      })
+      .catch(() => {});
+
     fetch('/api/projects')
       .then((res) => res.json())
       .then((data) => {
@@ -330,16 +372,20 @@ export const App: React.FC = () => {
         formData.append('metadata', JSON.stringify(metadata));
 
         uploadableFiles.forEach((file) => {
-          formData.append('files', file);
+          formData.append('photos', file);
         });
 
-        await fetch('/api/dataset/upload', {
+        const uploadRes = await fetch('/api/dataset/upload', {
           method: 'POST',
           body: formData,
-        }).catch(() => {});
+        });
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          throw new Error(`Photo upload failed (${uploadRes.status}): ${errText.slice(0, 100)}`);
+        }
       }
 
-      await fetch('/api/project/create', {
+      const projRes = await fetch('/api/project/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -347,7 +393,12 @@ export const App: React.FC = () => {
           datasetName: name,
           photoCount: photos.length,
         }),
-      }).catch(() => {});
+      });
+
+      if (!projRes.ok) {
+        const errText = await projRes.text();
+        throw new Error(`Project creation failed (${projRes.status}): ${errText.slice(0, 100)}`);
+      }
 
       const newProj: ProjectItem = {
         id: projId,
@@ -369,6 +420,110 @@ export const App: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Export current Stage 1 project metadata JSON to disk
+  const handleExportProjectJson = () => {
+    if (photos.length === 0) return;
+    const projId = selectedProjectId || `proj_${Date.now()}`;
+    const name = datasetName || '3D Reconstruction Target';
+
+    const exportData = {
+      id: projId,
+      name,
+      photoCount: photos.length,
+      createdAt: Date.now(),
+      healthScore: healthSummary.healthScore,
+      isReadyForSplatting: healthSummary.isReadyForSplatting,
+      angleCoverage: healthSummary.angleCoverage,
+      recommendations: healthSummary.recommendations,
+      photos: photos.map((p) => ({
+        id: p.id,
+        originalName: p.name,
+        filename: p.name,
+        size: p.sizeBytes,
+        sharpnessScore: p.sharpnessScore,
+        isBlurry: p.isBlurry,
+        angleSector: p.angleSector,
+        hash: p.hash,
+        cameraModel: p.metadata?.cameraModel || 'Mobile Camera',
+        focalLength: p.metadata?.focalLength || 26,
+      })),
+    };
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute('download', `${name.replace(/[^a-zA-Z0-9_-]/g, '_')}_project.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    setNotification({
+      type: 'success',
+      message: `Exported project "${name}" JSON file to disk!`,
+    });
+  };
+
+  // Import saved project JSON file from disk into Stage 2
+  const handleLoadProjectFromDisk = async (projectData: any) => {
+    try {
+      const res = await fetch('/api/project/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectData),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Import request failed (${res.status})`);
+      }
+      const data = await res.json();
+      const importedProj: ProjectItem = data.project || {
+        id: projectData.id || `proj_${Date.now()}`,
+        name: projectData.name || 'Imported 3D Project',
+        photoCount: projectData.photoCount || (projectData.photos ? projectData.photos.length : 12),
+        createdAt: projectData.createdAt || Date.now(),
+      };
+
+      setProjects((prev) => [importedProj, ...prev.filter((p) => p.id !== importedProj.id)]);
+      setSelectedProjectId(importedProj.id);
+      if (projectData.name) setDatasetName(projectData.name);
+
+      setNotification({
+        type: 'success',
+        message: `Loaded project "${importedProj.name}" from disk! Set as active in Stage 2.`,
+      });
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: `Could not import project: ${err.message}`,
+      });
+    }
+  };
+
+  // Register custom PLY/SPLAT file loaded from disk in Stage 3
+  const handleCustomPlyLoaded = (file: File, fileUrl: string) => {
+    const newModel = {
+      id: `custom_model_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: file.name,
+      url: fileUrl,
+    };
+    setCustomModels((prev) => [newModel, ...prev.filter((m) => m.url !== fileUrl && m.name !== file.name)]);
+    setSelectedModelUrl(fileUrl);
+    setNotification({
+      type: 'success',
+      message: `Loaded custom 3D model "${file.name}" from disk into Stage 3 viewer!`,
+    });
+  };
+
+  // Handle Stage 3 Header File Upload for PLY/SPLAT
+  const handleStage3HeaderFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileUrl = URL.createObjectURL(file);
+    handleCustomPlyLoaded(file, fileUrl);
+    e.target.value = '';
   };
 
   // Stage 2: Create 3D Model File at Chosen Quality
@@ -508,6 +663,15 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
+            {/* Demo Mode Badge (Locked at code level - users cannot change) */}
+            <div
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-950/80 border border-amber-700/60 text-amber-300 text-xs font-bold rounded-xl shadow-md"
+              title="Demo Mode Active: Live Cloud GPU training is paused to prevent GCloud compute costs. Serving pre-rendered SuperSplat 3DGS model assets for Stage 2 & Stage 3 viewing."
+            >
+              <Sliders className="w-3.5 h-3.5 text-amber-400" />
+              <span>Demo Mode Active</span>
+            </div>
+
             <button
               onClick={handleResetAllData}
               className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-700/60 text-rose-300 hover:text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-95"
@@ -590,6 +754,7 @@ export const App: React.FC = () => {
                   datasetName={datasetName}
                   onUpdateDatasetName={setDatasetName}
                   onSubmitPipeline={handleCreateProjectInStage1}
+                  onExportProjectJson={handleExportProjectJson}
                   isSubmitting={isSubmitting}
                 />
               </div>
@@ -606,10 +771,12 @@ export const App: React.FC = () => {
               selectedProjectId={selectedProjectId}
               onSelectProject={setSelectedProjectId}
               onDeleteProject={handleDeleteProject}
+              onLoadProjectFromDisk={handleLoadProjectFromDisk}
               selectedQuality={selectedQuality}
               onSelectQuality={setSelectedQuality}
               onGenerateModel={handleGenerateModelInStage2}
               isGenerating={isSubmitting}
+              isGcpProcessingEnabled={isGcpProcessingEnabled}
             />
 
             {/* GCP Credit & Cost Monitor */}
@@ -640,6 +807,15 @@ export const App: React.FC = () => {
         {/* ================= STAGE 3 PAGE: View 3D PLY Model ================= */}
         {activeStage === 'stage3' && (
           <div className="space-y-6">
+            {/* Hidden Stage 3 Header PLY File Input */}
+            <input
+              type="file"
+              ref={stage3FileInputRef}
+              onChange={handleStage3HeaderFileUpload}
+              accept=".ply,.splat"
+              className="hidden"
+            />
+
             {/* Stage 3 Model Selector Header Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 bg-splat-cardBg/90 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-xl">
               <div className="flex items-center space-x-3">
@@ -653,28 +829,64 @@ export const App: React.FC = () => {
                       WebGL Three.js Renderer
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-400">Viewing PLY created in Stage 2 by default (or choose existing model)</p>
+                  <p className="text-xs text-slate-400">Viewing PLY created in Stage 2 by default (or load custom PLY from disk)</p>
                 </div>
               </div>
 
               {/* Model Selector Bar */}
               <div className="flex flex-wrap items-center space-x-3">
+                {/* Load PLY from Disk Button */}
+                <button
+                  onClick={() => stage3FileInputRef.current?.click()}
+                  className="px-3.5 py-2 bg-splat-neonCyan/10 hover:bg-splat-neonCyan/20 border border-splat-neonCyan/40 text-splat-neonCyan rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 shadow-md active:scale-95"
+                  title="Load custom .PLY or .SPLAT file directly from disk"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Load PLY from Disk</span>
+                </button>
+
                 <span className="text-xs font-bold text-slate-400 uppercase font-mono">Select 3D Model:</span>
                 <select
                   value={selectedModelUrl}
                   onChange={(e) => setSelectedModelUrl(e.target.value)}
                   className="bg-slate-900 border border-slate-700 text-splat-neonGreen text-xs font-bold font-mono px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-splat-neonGreen transition-all cursor-pointer max-w-xs truncate"
                 >
-                  <option value="/models/sample_cactus.ply">
-                    Box 3DGS Cactus Scan [STANDARD] (sample_cactus.ply)
-                  </option>
-                  {jobs
-                    .filter((j) => Boolean(j.plyFileUrl))
-                    .map((j) => (
-                      <option key={j.id} value={j.plyFileUrl}>
-                        {j.datasetName} [{j.qualityPreset ? j.qualityPreset.toUpperCase() : 'STANDARD'}] ({j.plyFileUrl?.split('/').pop()})
-                      </option>
-                    ))}
+                  <optgroup label="Box Cactus 3DGS Pre-Rendered Models (Demo)">
+                    <option value="/models/cactus_splat3_30kSteps_142k_splats.compressed.ply">
+                      Box 3DGS Cactus Scan [DRAFT - 142K Splats]
+                    </option>
+                    <option value="/models/cactus_splat3_30kSteps_464k_splats.compressed.ply">
+                      Box 3DGS Cactus Scan [STANDARD - 464K Splats]
+                    </option>
+                    <option value="/models/cactus_splat3_30kSteps_719k_splats.compressed.ply">
+                      Box 3DGS Cactus Scan [HIGH - 719K Splats]
+                    </option>
+                    <option value="/models/cactus_splat3_25kSteps_2M_splats.compressed.ply">
+                      Box 3DGS Cactus Scan [ULTRA - 2.0M Splats]
+                    </option>
+                  </optgroup>
+
+                  {customModels.length > 0 && (
+                    <optgroup label="Loaded from Local Disk">
+                      {customModels.map((cm) => (
+                        <option key={cm.id} value={cm.url}>
+                          {cm.name} [DISK FILE]
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {jobs.filter((j) => Boolean(j.plyFileUrl)).length > 0 && (
+                    <optgroup label="Reconstructed Pipeline Jobs">
+                      {jobs
+                        .filter((j) => Boolean(j.plyFileUrl))
+                        .map((j) => (
+                          <option key={j.id} value={j.plyFileUrl}>
+                            {j.datasetName} [{j.qualityPreset ? j.qualityPreset.toUpperCase() : 'STANDARD'}] ({j.plyFileUrl?.split('/').pop()})
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
                 </select>
 
                 <button
@@ -689,7 +901,9 @@ export const App: React.FC = () => {
             {/* 3D Splat Inspector Viewport */}
             <SplatViewport3D
               modelUrl={selectedModelUrl}
+              onCustomFileLoaded={handleCustomPlyLoaded}
               datasetName={
+                customModels.find((m) => m.url === selectedModelUrl)?.name ||
                 jobs.find((j) => j.plyFileUrl === selectedModelUrl)?.datasetName ||
                 (activeJob
                   ? `${activeJob.datasetName} [${(activeJob.qualityPreset || 'standard').toUpperCase()}]`

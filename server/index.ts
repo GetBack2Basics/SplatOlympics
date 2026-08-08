@@ -20,13 +20,20 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Set up upload storage directory
+// Set up upload storage directory and models directory
 const uploadDir = path.join(process.cwd(), 'uploads');
+const modelsDir = path.join(uploadDir, 'models');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+if (!fs.existsSync(modelsDir)) {
+  fs.mkdirSync(modelsDir, { recursive: true });
+}
 
-// Multer storage engine
+// Global Admin GCloud Processing Switch state (Locked to false in Demo Mode to prevent GCloud costs)
+const isGcpProcessingEnabled = false;
+
+// Multer storage engine for photos
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);
@@ -35,6 +42,18 @@ const storage = multer.diskStorage({
     const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
     cb(null, `photo_${uniqueSuffix}${ext}`);
+  },
+});
+
+// Multer storage engine for 3D PLY/SPLAT models
+const modelStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, modelsDir);
+  },
+  filename: (_req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    cb(null, `custom_${uniqueSuffix}_${safeName}`);
   },
 });
 
@@ -52,8 +71,21 @@ const upload = multer({
   },
 });
 
-// Serve uploaded image files and real sample photos statically
+const modelUpload = multer({
+  storage: modelStorage,
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB max per 3D model
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.ply' || ext === '.splat') {
+      return cb(null, true);
+    }
+    cb(new Error('Only .PLY and .SPLAT 3D model files are supported.'));
+  },
+});
+
+// Serve uploaded image files, models, and real sample photos statically
 app.use('/uploads', express.static(uploadDir));
+app.use('/uploads/models', express.static(modelsDir));
 const publicDir = path.join(process.cwd(), 'public');
 if (fs.existsSync(publicDir)) {
   app.use(express.static(publicDir));
@@ -102,6 +134,38 @@ function loadProjectsFromDisk() {
     }
   } catch (err) {
     console.warn('[Server] Could not load projects_db.json:', err);
+  }
+
+  // Pre-populate Demo Box Cactus Scan Project if no projects exist
+  if (datasetStore.size === 0) {
+    const demoId = 'proj_box_cactus_demo';
+    datasetStore.set(demoId, {
+      id: demoId,
+      name: 'Box 3DGS Cactus Scan (Demo Project)',
+      photos: Array.from({ length: 12 }, (_, i) => ({
+        id: `sample_photo_${i + 1}`,
+        originalName: `Nikon_Z7II_Box_Scan_${(i + 1).toString().padStart(2, '0')}.jpg`,
+        filename: `cactus_${i + 1}.jpg`,
+        url: `/sample_photos/cactus_${i + 1}.jpg`,
+        size: 2500000,
+        width: 8256,
+        height: 5504,
+        sharpnessScore: 94,
+        isBlurry: false,
+        angleSector: ['North', 'East', 'South', 'West', 'Overhead'][i % 5],
+        hash: `demo_hash_${i}`,
+        cameraModel: 'Nikon Z7II',
+        focalLength: 50,
+        uploadedAt: Date.now(),
+      })),
+      healthScore: 95,
+      isReadyForSplatting: true,
+      angleCoverage: { North: 3, South: 3, East: 3, West: 3, Overhead: 3 },
+      recommendations: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    saveProjectsToDisk();
   }
 }
 
@@ -323,6 +387,72 @@ app.post('/api/project/create', (req: Request, res: Response) => {
   });
 });
 
+// Import Full Saved Project JSON from Disk
+app.post('/api/project/import', (req: Request, res: Response) => {
+  try {
+    const projData = req.body || {};
+    const id = (projData.id || `proj_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`).toString();
+    const name = (projData.name || 'Imported 3D Project').toString();
+
+    const newDataset: StoredDataset = {
+      id,
+      name,
+      photos: Array.isArray(projData.photos) ? projData.photos : [],
+      healthScore: Number(projData.healthScore) || 85,
+      isReadyForSplatting: projData.isReadyForSplatting !== undefined ? Boolean(projData.isReadyForSplatting) : true,
+      angleCoverage: projData.angleCoverage || { North: 3, South: 3, East: 3, West: 3, Overhead: 3 },
+      recommendations: Array.isArray(projData.recommendations) ? projData.recommendations : [],
+      createdAt: Number(projData.createdAt) || Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    datasetStore.set(id, newDataset);
+    saveProjectsToDisk();
+
+    res.json({
+      success: true,
+      project: {
+        id: newDataset.id,
+        name: newDataset.name,
+        photoCount: newDataset.photos.length || Number(projData.photoCount) || 12,
+        createdAt: newDataset.createdAt,
+      },
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to import project JSON' });
+  }
+});
+
+// Upload Custom PLY/SPLAT Model File from Disk
+app.post('/api/model/upload', modelUpload.single('plyFile'), (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No .PLY or .SPLAT model file uploaded.' });
+    }
+
+    const plyFileUrl = `/uploads/models/${file.filename}`;
+    res.json({
+      success: true,
+      filename: file.originalname,
+      plyFileUrl,
+      sizeBytes: file.size,
+    });
+  } catch (err: any) {
+    console.error('[API] Model upload error:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload PLY model file' });
+  }
+});
+
+// Admin GCP Cloud Processing Switch Status Endpoint
+app.get('/api/settings/gcp-status', (_req: Request, res: Response) => {
+  res.json({ isGcpProcessingEnabled });
+});
+
+app.post('/api/settings/gcp-status', (_req: Request, res: Response) => {
+  res.json({ success: false, isGcpProcessingEnabled: false, isDemoModeLocked: true, message: 'Demo mode is locked at code level.' });
+});
+
 // Get Dataset Details
 app.get('/api/dataset/:id', (req: Request, res: Response) => {
   const dataset = datasetStore.get(req.params.id);
@@ -475,14 +605,24 @@ app.post('/api/pipeline/job/create', (req: Request, res: Response) => {
     const { datasetId, datasetName, photoCount, qualityPreset } = req.body || {};
     const dataset = datasetStore.get(datasetId);
     const photos = dataset ? dataset.photos : [];
+    
+    // In Demo Mode (or when GCloud is paused), jobQueue generates/assigns authentic pre-computed SuperSplat PLY model
     const job = jobQueue.createJob(
       datasetId || `ds_${Date.now()}`,
       datasetName || (dataset ? dataset.name : '3D Capture Session'),
-      Number(photoCount) || (photos.length > 0 ? photos.length : 15),
+      Number(photoCount) || (photos.length > 0 ? photos.length : 12),
       qualityPreset || 'standard',
       photos
     );
-    res.json({ success: true, job });
+
+    res.json({
+      success: true,
+      job,
+      isDemoMode: !isGcpProcessingEnabled,
+      message: !isGcpProcessingEnabled
+        ? `Demo Mode Active: Generated 3D Reconstruction model for "${job.datasetName}" [${(qualityPreset || 'standard').toUpperCase()}] using authentic pre-rendered SuperSplat PLY sample assets!`
+        : `3D Reconstruction Job launched for "${job.datasetName}" [${(qualityPreset || 'standard').toUpperCase()}]!`,
+    });
   } catch (err: any) {
     console.error('[API] Job creation error:', err);
     res.status(500).json({ error: err.message || 'Failed to create job' });
