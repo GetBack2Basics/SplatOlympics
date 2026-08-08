@@ -10,6 +10,8 @@ build/
 uploads/models/*
 !uploads/models/.gitkeep
 uploads/cost_monitor_db.json
+uploads/jobs_db.json
+uploads/projects_db.json
 uploads/photo_*
 public/models/*2M_splats*
 
